@@ -1,12 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
+  Calendar,
   CheckCircle2,
   Download,
+  Mail,
   MailCheck,
   MapPin,
+  Phone,
   Printer,
-  QrCode,
   RefreshCw,
 } from 'lucide-react';
 import { QrCodeImage } from '../components/QrCodeImage';
@@ -16,22 +18,34 @@ import { buildPassQrPayload, downloadPassPng, getSchoolDisplay } from '../lib/qr
 import type { OtherAttendeeDetail, Registration } from '../types';
 
 export const InvitationPage: React.FC = () => {
-  const { settings, venues, createRegistration, showToast } = useEvent();
+  const { getEventBySlugOrId, getVenuesForEvent, createRegistration, showToast } = useEvent();
   const [searchParams] = useSearchParams();
 
+  const eventParam = searchParams.get('event');
   const venueParam = searchParams.get('venue') || '';
   const tierParam = (searchParams.get('tier') || 'regular').toLowerCase();
   const isVip = tierParam === 'vip';
 
+  const targetEvent = useMemo(
+    () => getEventBySlugOrId(eventParam),
+    [eventParam, getEventBySlugOrId]
+  );
+
+  const eventVenues = useMemo(
+    () => getVenuesForEvent(targetEvent.id),
+    [getVenuesForEvent, targetEvent.id]
+  );
+
   const activeVenue = useMemo(() => {
     return (
-      venues.find(
+      eventVenues.find(
         (v) => v.slug === venueParam || v.id.toLowerCase() === venueParam.toLowerCase()
-      ) || venues[0]
+      ) || eventVenues[0]
     );
-  }, [venueParam, venues]);
+  }, [eventVenues, venueParam]);
 
-  const toggles = settings.fieldToggles;
+  const toggles = targetEvent.fieldToggles;
+  const requiredFields = targetEvent.requiredFields;
 
   const [parentNumber, setParentNumber] = useState('');
   const [fullName, setFullName] = useState('');
@@ -62,6 +76,14 @@ export const InvitationPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (toggles.phone && requiredFields.phone && !phone.trim()) {
+      showToast('Phone number is required by the event organizer.', 'warning');
+      return;
+    }
+    if (toggles.email && requiredFields.email && !email.trim()) {
+      showToast('Email address is required by the event organizer.', 'warning');
+      return;
+    }
     if (toggles.school && !schoolType) {
       showToast('Please indicate which school your kids are attending.', 'warning');
       return;
@@ -71,19 +93,20 @@ export const InvitationPage: React.FC = () => {
       return;
     }
     if (
-      settings.qrDeliveryMode === 'contact_info' &&
+      targetEvent.qrDeliveryMode === 'contact_info' &&
       !email.trim() &&
       !phone.trim()
     ) {
-      showToast('Please provide an email or phone number to receive your QR pass(es).', 'warning');
+      showToast('Please enter your email or phone number to receive your QR pass(es).', 'warning');
       return;
     }
 
     setSubmitting(true);
     try {
       const { registration, dispatchMessage } = await createRegistration({
+        eventId: targetEvent.id,
         parentNumber: toggles.parentNumber ? parentNumber : '',
-        name: toggles.fullName ? fullName : parentNumber || email || 'Event Guest',
+        name: toggles.fullName ? fullName : parentNumber || email || phone || 'Event Guest',
         phone: toggles.phone ? phone : '',
         email: toggles.email ? email : '',
         schoolType: toggles.school ? schoolType : '',
@@ -104,8 +127,8 @@ export const InvitationPage: React.FC = () => {
       setDispatchInfo(dispatchMessage || '');
       showToast(
         registration.deliveryMode === 'contact_info'
-          ? `${registration.passes.length} QR pass(es) sent to your registered contact information!`
-          : `Registration confirmed! Generated ${registration.passes.length} QR pass(es).`,
+          ? `${registration.passes.length} SABIS® QR pass(es) sent to your registered contact information!`
+          : `Registration confirmed! Generated ${registration.passes.length} SABIS® QR pass(es).`,
         'success'
       );
     } finally {
@@ -131,57 +154,59 @@ export const InvitationPage: React.FC = () => {
   const anyFieldVisible = Object.values(toggles).some(Boolean);
 
   return (
-    <div className="min-h-screen flex flex-col justify-center items-center px-4 py-8 sm:py-12 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
+    <div className="min-h-screen flex flex-col justify-center items-center px-4 py-8 sm:py-12 bg-[#F7F4F2]">
       <div className={`w-full ${completedReg && completedReg.passes.length > 1 ? 'max-w-3xl' : 'max-w-lg'} space-y-6`}>
-        {/* Event Invitation Header — Locked Venue & Tier */}
-        <div className="text-center space-y-2.5">
-          <div
-            className={`w-12 h-12 rounded-2xl flex items-center justify-center mx-auto shadow-lg ${
-              isVip
-                ? 'bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-500/25'
-                : 'bg-gradient-to-br from-indigo-500 to-sky-500 shadow-indigo-500/25'
-            }`}
-          >
-            <QrCode className="w-6 h-6 text-white" />
-          </div>
-          <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-            {settings.eventTitle}
+        {/* Official SABIS® Header — Locked Event, Venue & Tier */}
+        <div className="text-center space-y-3">
+          <img src="/sabis-logo.svg" alt="SABIS® Logo" className="h-12 w-auto mx-auto" />
+          <h1 className="text-xl sm:text-2xl font-bold text-[#26211E] tracking-tight">
+            {targetEvent.name}
           </h1>
           <div className="flex flex-wrap items-center justify-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-sky-500/15 text-sky-300 border border-sky-500/30">
+            {targetEvent.eventDate && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white text-[#26211E] border border-[#E3DBD3]">
+                <Calendar className="w-3.5 h-3.5 text-[#016836]" />
+                <span>{targetEvent.eventDate}</span>
+              </span>
+            )}
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#E6F4FA] text-[#0080BB] border border-[#0080BB]/25">
               <MapPin className="w-3.5 h-3.5" />
               <span>Venue: {activeVenue?.name || 'Main Entrance'}</span>
             </span>
             <span
               className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold border ${
                 isVip
-                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                  : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
+                  ? 'bg-[#FCF8E3] text-[#8A6D3B] border-[#8A6D3B]/40'
+                  : 'bg-[#DFF0D8] text-[#016836] border-[#016836]/25'
               }`}
             >
               {isVip ? '⭐ VIP Invitation Pass' : 'Regular Parent Pass'}
             </span>
           </div>
-          <p className="text-xs sm:text-sm text-slate-400">
-            {settings.qrDeliveryMode === 'contact_info'
-              ? 'Complete your registration below to receive your personal entry QR pass(es) on your registered contact details.'
-              : 'Complete your registration below to generate your personal entry QR code pass(es).'}
+          <p className="text-xs sm:text-sm text-[#7B6E65]">
+            {targetEvent.qrDeliveryMode === 'contact_info'
+              ? 'Complete your registration below to receive your personal SABIS® entry QR pass(es) on your registered contact details.'
+              : 'Complete your registration below to generate your personal SABIS® entry QR code pass(es).'}
           </p>
         </div>
 
         {/* STEP 1: Dynamic Invitation Registration Form */}
         {!completedReg ? (
-          <div className="glass-panel rounded-2xl p-6 shadow-2xl border border-slate-700/80">
+          <div
+            className={`glass-panel rounded-2xl p-6 sm:p-7 border-t-4 ${
+              isVip ? 'border-t-[#8A6D3B]' : 'border-t-[#016836]'
+            }`}
+          >
             {!anyFieldVisible ? (
-              <div className="py-6 text-center text-xs text-slate-400">
+              <div className="py-6 text-center text-xs text-[#7B6E65]">
                 Registration fields are currently hidden by the event administrator.
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
                 {toggles.parentNumber && (
                   <div>
-                    <label className="block text-xs font-semibold text-slate-200 mb-1.5">
-                      Parent Number <span className="text-rose-400">*</span>
+                    <label className="block text-xs font-bold text-[#26211E] mb-1.5">
+                      Parent Number <span className="text-[#E53C2E]">*</span>
                     </label>
                     <input
                       type="text"
@@ -189,15 +214,15 @@ export const InvitationPage: React.FC = () => {
                       value={parentNumber}
                       onChange={(e) => setParentNumber(e.target.value)}
                       placeholder="e.g., PAR-10421"
-                      className="w-full px-4 py-2.5 rounded-xl bg-slate-900/95 border border-slate-700 text-sm font-mono text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                      className="w-full px-4 py-2.5 rounded-xl bg-white border border-[#B6ADA4] text-sm font-mono text-[#26211E] placeholder-[#7B6E65]/70 focus:outline-none focus:border-[#016836]"
                     />
                   </div>
                 )}
 
                 {toggles.fullName && (
                   <div>
-                    <label className="block text-xs font-semibold text-slate-200 mb-1.5">
-                      Full Name <span className="text-rose-400">*</span>
+                    <label className="block text-xs font-bold text-[#26211E] mb-1.5">
+                      Full Name <span className="text-[#E53C2E]">*</span>
                     </label>
                     <input
                       type="text"
@@ -205,43 +230,58 @@ export const InvitationPage: React.FC = () => {
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       placeholder="e.g., Nadia Khoury"
-                      className="w-full px-4 py-2.5 rounded-xl bg-slate-900/95 border border-slate-700 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                      className="w-full px-4 py-2.5 rounded-xl bg-white border border-[#B6ADA4] text-sm text-[#26211E] placeholder-[#7B6E65]/70 focus:outline-none focus:border-[#016836]"
                     />
                   </div>
                 )}
 
-                {(toggles.email || toggles.phone) && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    {toggles.email && (
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-200 mb-1.5">
-                          Register Email <span className="text-rose-400">*</span>
-                        </label>
-                        <input
-                          type="email"
-                          required
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          placeholder="parent@example.com"
-                          className="w-full px-4 py-2.5 rounded-xl bg-slate-900/95 border border-slate-700 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                        />
-                      </div>
-                    )}
-                    {toggles.phone && (
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-200 mb-1.5">
-                          Register Phone Number <span className="text-rose-400">*</span>
-                        </label>
-                        <input
-                          type="tel"
-                          required
-                          value={phone}
-                          onChange={(e) => setPhone(e.target.value)}
-                          placeholder="+971 50 482 1900"
-                          className="w-full px-4 py-2.5 rounded-xl bg-slate-900/95 border border-slate-700 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                        />
-                      </div>
-                    )}
+                {/* Separate Phone Number Field — Required/Optional controlled by Control Dashboard */}
+                {toggles.phone && (
+                  <div>
+                    <label className="flex items-center justify-between text-xs font-bold text-[#26211E] mb-1.5">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Phone className="w-3.5 h-3.5 text-[#016836]" />
+                        <span>Register Phone Number</span>
+                      </span>
+                      {requiredFields.phone ? (
+                        <span className="text-[11px] font-bold text-[#E53C2E]">* Required</span>
+                      ) : (
+                        <span className="text-[11px] font-normal text-[#7B6E65]">Optional</span>
+                      )}
+                    </label>
+                    <input
+                      type="tel"
+                      required={requiredFields.phone}
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="+971 50 482 1900"
+                      className="w-full px-4 py-2.5 rounded-xl bg-white border border-[#B6ADA4] text-sm text-[#26211E] placeholder-[#7B6E65]/70 focus:outline-none focus:border-[#016836]"
+                    />
+                  </div>
+                )}
+
+                {/* Separate Email Field — Required/Optional controlled by Control Dashboard */}
+                {toggles.email && (
+                  <div>
+                    <label className="flex items-center justify-between text-xs font-bold text-[#26211E] mb-1.5">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Mail className="w-3.5 h-3.5 text-[#016836]" />
+                        <span>Register Email Address</span>
+                      </span>
+                      {requiredFields.email ? (
+                        <span className="text-[11px] font-bold text-[#E53C2E]">* Required</span>
+                      ) : (
+                        <span className="text-[11px] font-normal text-[#7B6E65]">Optional</span>
+                      )}
+                    </label>
+                    <input
+                      type="email"
+                      required={requiredFields.email}
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="parent@example.com"
+                      className="w-full px-4 py-2.5 rounded-xl bg-white border border-[#B6ADA4] text-sm text-[#26211E] placeholder-[#7B6E65]/70 focus:outline-none focus:border-[#016836]"
+                    />
                   </div>
                 )}
 
@@ -259,8 +299,8 @@ export const InvitationPage: React.FC = () => {
 
                 {toggles.numAttendees && (
                   <div>
-                    <label className="block text-xs font-semibold text-slate-200 mb-1.5">
-                      Number of Attendees <span className="text-rose-400">*</span>
+                    <label className="block text-xs font-bold text-[#26211E] mb-1.5">
+                      Number of Attendees <span className="text-[#E53C2E]">*</span>
                     </label>
                     <input
                       type="number"
@@ -269,25 +309,24 @@ export const InvitationPage: React.FC = () => {
                       required
                       value={numAttendees}
                       onChange={(e) => handleAttendeesChange(parseInt(e.target.value, 10))}
-                      className="w-full px-4 py-2.5 rounded-xl bg-slate-900/95 border border-slate-700 text-sm text-white focus:outline-none focus:border-indigo-500"
+                      className="w-full px-4 py-2.5 rounded-xl bg-white border border-[#B6ADA4] text-sm text-[#26211E] focus:outline-none focus:border-[#016836]"
                     />
-                    <p className="text-[11px] text-sky-300/90 mt-1">
-                      {effectivePartySize} individual QR {effectivePartySize === 1 ? 'code' : 'codes'} will be{' '}
-                      {settings.qrDeliveryMode === 'contact_info' ? 'sent' : 'generated'} (1 per attendee).
+                    <p className="text-[11px] text-[#016836] font-medium mt-1">
+                      {effectivePartySize} individual SABIS® QR {effectivePartySize === 1 ? 'code' : 'codes'} will be{' '}
+                      {targetEvent.qrDeliveryMode === 'contact_info' ? 'sent' : 'generated'} (1 per attendee).
                     </p>
                   </div>
                 )}
 
-                {/* Age of Attendees (dynamic inputs matching Number of Attendees) */}
                 {toggles.attendeeAges && (
-                  <div className="p-3.5 rounded-xl bg-slate-900/70 border border-slate-700/80 space-y-2">
-                    <label className="block text-xs font-semibold text-slate-200">
+                  <div className="p-3.5 rounded-xl bg-[#F7F4F2] border border-[#E3DBD3] space-y-2">
+                    <label className="block text-xs font-bold text-[#26211E]">
                       Age of Attendees ({effectivePartySize})
                     </label>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                       {Array.from({ length: effectivePartySize }).map((_, idx) => (
                         <div key={idx}>
-                          <label className="block text-[11px] text-slate-400 mb-1">
+                          <label className="block text-[11px] text-[#7B6E65] mb-1">
                             Attendee {idx + 1} Age
                           </label>
                           <input
@@ -302,7 +341,7 @@ export const InvitationPage: React.FC = () => {
                               setAttendeeAges(next);
                             }}
                             placeholder="Age"
-                            className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-indigo-500"
+                            className="w-full px-3 py-2 rounded-lg bg-white border border-[#B6ADA4] text-xs text-[#26211E] focus:outline-none focus:border-[#016836]"
                           />
                         </div>
                       ))}
@@ -310,24 +349,23 @@ export const InvitationPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* Contact Details of the Other Attendee(s) */}
                 {toggles.otherAttendeeContacts && effectivePartySize > 1 && (
-                  <div className="p-3.5 rounded-xl bg-slate-900/70 border border-slate-700/80 space-y-3">
+                  <div className="p-3.5 rounded-xl bg-[#F7F4F2] border border-[#E3DBD3] space-y-3">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-200">
+                      <label className="block text-xs font-bold text-[#26211E]">
                         Contact Details of the Other Attendee{effectivePartySize > 2 ? 's' : ''}
                       </label>
-                      <p className="text-[11px] text-slate-400 mt-0.5">
+                      <p className="text-[11px] text-[#7B6E65] mt-0.5">
                         Enter the name and phone/email for each accompanying attendee
                       </p>
                     </div>
                     {otherAttendees.map((other, idx) => (
                       <div
                         key={idx}
-                        className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 p-2.5 rounded-xl bg-slate-950/70 border border-slate-800"
+                        className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 p-2.5 rounded-xl bg-white border border-[#E3DBD3]"
                       >
                         <div>
-                          <label className="block text-[11px] text-slate-400 mb-1">
+                          <label className="block text-[11px] text-[#7B6E65] mb-1">
                             Attendee {idx + 2} Full Name
                           </label>
                           <input
@@ -340,11 +378,11 @@ export const InvitationPage: React.FC = () => {
                               setOtherAttendees(next);
                             }}
                             placeholder="Companion full name"
-                            className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-indigo-500"
+                            className="w-full px-3 py-2 rounded-lg bg-white border border-[#B6ADA4] text-xs text-[#26211E] focus:outline-none focus:border-[#016836]"
                           />
                         </div>
                         <div>
-                          <label className="block text-[11px] text-slate-400 mb-1">
+                          <label className="block text-[11px] text-[#7B6E65] mb-1">
                             Attendee {idx + 2} Phone / Email
                           </label>
                           <input
@@ -357,7 +395,7 @@ export const InvitationPage: React.FC = () => {
                               setOtherAttendees(next);
                             }}
                             placeholder="+971 50 ... or email"
-                            className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-indigo-500"
+                            className="w-full px-3 py-2 rounded-lg bg-white border border-[#B6ADA4] text-xs text-[#26211E] focus:outline-none focus:border-[#016836]"
                           />
                         </div>
                       </div>
@@ -369,15 +407,15 @@ export const InvitationPage: React.FC = () => {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className={`w-full py-3 rounded-xl text-sm font-semibold text-white shadow-lg transition disabled:opacity-50 ${
+                    className={`w-full py-3 rounded-xl text-sm font-bold text-white shadow-md transition disabled:opacity-50 ${
                       isVip
-                        ? 'bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 hover:to-orange-400 shadow-amber-600/25'
-                        : 'bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-500 hover:to-sky-500 shadow-indigo-600/25'
+                        ? 'bg-[#8A6D3B] hover:bg-[#70572E] shadow-[#8A6D3B]/20'
+                        : 'bg-[#016836] hover:bg-[#01522B] shadow-[#016836]/20'
                     }`}
                   >
                     {submitting
                       ? 'Processing Registration...'
-                      : settings.qrDeliveryMode === 'contact_info'
+                      : targetEvent.qrDeliveryMode === 'contact_info'
                       ? `Complete Registration & Send ${effectivePartySize} QR ${
                           effectivePartySize === 1 ? 'Code' : 'Codes'
                         }`
@@ -391,84 +429,88 @@ export const InvitationPage: React.FC = () => {
           </div>
         ) : completedReg.deliveryMode === 'contact_info' ? (
           /* STEP 2A: QR Codes Dispatched to Registered Contact Info */
-          <div className="glass-panel rounded-2xl p-6 sm:p-8 shadow-2xl border border-emerald-500/40 text-center space-y-5">
-            <div className="w-16 h-16 rounded-2xl bg-emerald-500/15 border border-emerald-500/35 flex items-center justify-center mx-auto">
-              <MailCheck className="w-8 h-8 text-emerald-400" />
+          <div className="glass-panel rounded-2xl p-6 sm:p-8 border-t-4 border-t-[#016836] text-center space-y-5">
+            <div className="w-16 h-16 rounded-2xl bg-[#DFF0D8] border border-[#016836]/25 flex items-center justify-center mx-auto">
+              <MailCheck className="w-8 h-8 text-[#016836]" />
             </div>
             <div className="space-y-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#DFF0D8] text-[#016836] border border-[#016836]/25">
                 <CheckCircle2 className="w-3.5 h-3.5" /> Registration Confirmed
               </span>
-              <h2 className="text-xl font-bold text-white">
-                {completedReg.passes.length} Entry QR {completedReg.passes.length === 1 ? 'Pass' : 'Passes'} Sent!
+              <h2 className="text-xl font-bold text-[#26211E]">
+                {completedReg.passes.length} SABIS® Entry QR {completedReg.passes.length === 1 ? 'Pass' : 'Passes'} Sent!
               </h2>
-              <p className="text-xs sm:text-sm text-slate-300 max-w-md mx-auto">
+              <p className="text-xs sm:text-sm text-[#7B6E65] max-w-md mx-auto">
                 Your unique QR entry {completedReg.passes.length === 1 ? 'pass has' : 'passes have'} been dispatched to your registered contact information:
               </p>
             </div>
 
-            <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 text-left space-y-1.5 text-xs max-w-md mx-auto">
+            <div className="bg-[#F7F4F2] border border-[#E3DBD3] rounded-xl p-4 text-left space-y-1.5 text-xs max-w-md mx-auto">
               <div className="flex justify-between gap-2">
-                <span className="text-slate-400">Registration ID:</span>
-                <span className="font-mono font-bold text-sky-300">{completedReg.id}</span>
+                <span className="text-[#7B6E65]">Event:</span>
+                <span className="font-bold text-[#26211E] text-right">{targetEvent.name}</span>
               </div>
               <div className="flex justify-between gap-2">
-                <span className="text-slate-400">Name:</span>
-                <span className="font-semibold text-white">{completedReg.name}</span>
+                <span className="text-[#7B6E65]">Registration ID:</span>
+                <span className="font-mono font-bold text-[#016836]">{completedReg.id}</span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-[#7B6E65]">Name:</span>
+                <span className="font-bold text-[#26211E]">{completedReg.name}</span>
               </div>
               {completedReg.email && (
                 <div className="flex justify-between gap-2">
-                  <span className="text-slate-400">Email:</span>
-                  <span className="font-semibold text-emerald-300">{completedReg.email}</span>
+                  <span className="text-[#7B6E65]">Email:</span>
+                  <span className="font-semibold text-[#016836]">{completedReg.email}</span>
                 </div>
               )}
               {completedReg.phone && (
                 <div className="flex justify-between gap-2">
-                  <span className="text-slate-400">Phone:</span>
-                  <span className="font-semibold text-emerald-300">{completedReg.phone}</span>
+                  <span className="text-[#7B6E65]">Phone:</span>
+                  <span className="font-semibold text-[#016836]">{completedReg.phone}</span>
                 </div>
               )}
               <div className="flex justify-between gap-2">
-                <span className="text-slate-400">Venue:</span>
-                <span className="font-semibold text-white">{completedReg.assignedGate}</span>
+                <span className="text-[#7B6E65]">Venue:</span>
+                <span className="font-semibold text-[#26211E]">{completedReg.assignedGate}</span>
               </div>
               <div className="flex justify-between gap-2">
-                <span className="text-slate-400">QR Passes Issued:</span>
-                <span className="font-bold text-indigo-300">{completedReg.passes.length}</span>
+                <span className="text-[#7B6E65]">QR Passes Issued:</span>
+                <span className="font-bold text-[#016836]">{completedReg.passes.length}</span>
               </div>
               {getSchoolDisplay(completedReg) !== 'Not specified' && (
                 <div className="flex justify-between gap-2">
-                  <span className="text-slate-400">School:</span>
-                  <span className="text-slate-200 text-right">{getSchoolDisplay(completedReg)}</span>
+                  <span className="text-[#7B6E65]">School:</span>
+                  <span className="text-[#26211E] text-right">{getSchoolDisplay(completedReg)}</span>
                 </div>
               )}
             </div>
 
             {dispatchInfo && (
-              <p className="text-[11px] text-slate-400 max-w-md mx-auto">{dispatchInfo}</p>
+              <p className="text-[11px] text-[#7B6E65] max-w-md mx-auto">{dispatchInfo}</p>
             )}
 
             <button
               type="button"
               onClick={resetForm}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-[#26211E] bg-[#F7F4F2] hover:bg-[#E3DBD3]/60 border border-[#E3DBD3] transition"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
+              <RefreshCw className="w-3.5 h-3.5 text-[#016836]" />
               <span>Register Another Guest</span>
             </button>
           </div>
         ) : (
-          /* STEP 2B: Multi-QR Passes Generated Immediately On Screen */
-          <div className="glass-panel rounded-2xl p-6 shadow-2xl border border-emerald-500/40 space-y-5">
+          /* STEP 2B: Multi-QR SABIS®-Branded Passes Generated Immediately On Screen */
+          <div className="glass-panel rounded-2xl p-6 border-t-4 border-t-[#016836] space-y-5">
             <div className="text-center space-y-1">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#DFF0D8] text-[#016836] border border-[#016836]/25">
                 <CheckCircle2 className="w-3.5 h-3.5" /> Registration Confirmed
               </span>
-              <h2 className="text-lg font-bold text-white pt-1">
-                Your {completedReg.passes.length} Event Entry QR{' '}
+              <h2 className="text-lg font-bold text-[#26211E] pt-1">
+                Your {completedReg.passes.length} SABIS® Event Entry QR{' '}
                 {completedReg.passes.length === 1 ? 'Pass' : 'Passes'}
               </h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-[#7B6E65]">
                 Each attendee must present their own QR code pass at the venue entrance.
               </p>
             </div>
@@ -483,31 +525,34 @@ export const InvitationPage: React.FC = () => {
                   key={pass.passCode}
                   className={`${
                     isVip
-                      ? 'vip-pass-gradient border-amber-500/40'
-                      : 'pass-gradient border-indigo-500/30'
-                  } rounded-2xl p-5 border text-center space-y-3`}
+                      ? 'vip-pass-gradient border-[#8A6D3B]/40 border-t-4 border-t-[#8A6D3B]'
+                      : 'pass-gradient border-[#E3DBD3] border-t-4 border-t-[#016836]'
+                  } rounded-2xl p-5 border text-center space-y-3 shadow-sm`}
                 >
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center justify-between gap-2 border-b border-[#E3DBD3] pb-2.5">
+                    <img src="/sabis-logo.svg" alt="SABIS®" className="h-6 w-auto" />
                     <span
                       className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
                         isVip
-                          ? 'bg-amber-500/25 text-amber-300 border-amber-400/40'
-                          : 'bg-indigo-500/20 text-indigo-200 border-indigo-400/30'
+                          ? 'bg-[#FCF8E3] text-[#8A6D3B] border-[#8A6D3B]/40'
+                          : 'bg-[#DFF0D8] text-[#016836] border-[#016836]/25'
                       }`}
                     >
                       Pass {pass.passIndex} of {pass.totalPasses}
                     </span>
-                    <span className="font-mono text-xs font-bold text-sky-300">{pass.passCode}</span>
                   </div>
 
                   <div>
-                    <p className="text-base font-bold text-white">{pass.attendeeLabel}</p>
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-[#7B6E65]">
+                      {targetEvent.name}
+                    </p>
+                    <p className="text-base font-bold text-[#26211E] mt-0.5">{pass.attendeeLabel}</p>
                     {completedReg.parentNumber && (
-                      <p className="text-xs font-mono text-sky-300 mt-0.5">
+                      <p className="text-xs font-mono font-semibold text-[#016836] mt-0.5">
                         Parent #: {completedReg.parentNumber}
                       </p>
                     )}
-                    <div className="text-[11px] text-slate-400 mt-0.5">
+                    <div className="text-[11px] text-[#7B6E65] mt-0.5">
                       {pass.attendeeAge ? `Age: ${pass.attendeeAge}` : ''}
                       {pass.attendeeAge && pass.attendeeContact ? ' • ' : ''}
                       {pass.attendeeContact || ''}
@@ -515,28 +560,38 @@ export const InvitationPage: React.FC = () => {
                   </div>
 
                   <div className="flex justify-center py-1">
-                    <div className="bg-white p-3 rounded-2xl shadow-lg border-4 border-indigo-500/20">
-                      <QrCodeImage payload={buildPassQrPayload(completedReg, pass)} size={184} />
+                    <div
+                      className={`bg-white p-3 rounded-2xl shadow-sm border-2 ${
+                        isVip ? 'border-[#8A6D3B]/40' : 'border-[#016836]/30'
+                      }`}
+                    >
+                      <QrCodeImage payload={buildPassQrPayload(completedReg, pass)} size={196} />
                     </div>
                   </div>
 
-                  <div className="text-xs bg-slate-900/70 rounded-xl p-2.5 border border-slate-800 text-left space-y-1">
+                  <p className="font-mono text-xs font-bold text-[#016836] bg-white inline-block px-3 py-1 rounded-md border border-[#E3DBD3]">
+                    {pass.passCode}
+                  </p>
+
+                  <div className="text-xs bg-white/90 rounded-xl p-2.5 border border-[#E3DBD3] text-left space-y-1">
                     <div className="flex justify-between gap-2">
-                      <span className="text-slate-400">Venue:</span>
-                      <span className="font-semibold text-white truncate">{completedReg.assignedGate}</span>
+                      <span className="text-[#7B6E65]">Venue:</span>
+                      <span className="font-bold text-[#26211E] truncate">{completedReg.assignedGate}</span>
                     </div>
                     {getSchoolDisplay(completedReg) !== 'Not specified' && (
                       <div className="flex justify-between gap-2">
-                        <span className="text-slate-400">School:</span>
-                        <span className="text-slate-200 truncate">{getSchoolDisplay(completedReg)}</span>
+                        <span className="text-[#7B6E65]">School:</span>
+                        <span className="text-[#26211E] truncate">{getSchoolDisplay(completedReg)}</span>
                       </div>
                     )}
                   </div>
 
                   <button
                     type="button"
-                    onClick={() => downloadPassPng(completedReg, pass, settings.eventTitle)}
-                    className="w-full py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center gap-1.5 transition print:hidden"
+                    onClick={() => downloadPassPng(completedReg, pass, targetEvent.name)}
+                    className={`w-full py-2 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-1.5 transition print:hidden ${
+                      isVip ? 'bg-[#8A6D3B] hover:bg-[#70572E]' : 'bg-[#016836] hover:bg-[#01522B]'
+                    }`}
                   >
                     <Download className="w-3.5 h-3.5" />
                     <span>Save Pass {pass.passIndex} PNG</span>
@@ -549,15 +604,15 @@ export const InvitationPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition"
+                className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-white hover:bg-[#F7F4F2] text-[#26211E] border border-[#E3DBD3] flex items-center gap-1.5 transition"
               >
-                <Printer className="w-3.5 h-3.5" />
+                <Printer className="w-3.5 h-3.5 text-[#016836]" />
                 <span>Print All {completedReg.passes.length} Passes</span>
               </button>
               <button
                 type="button"
                 onClick={resetForm}
-                className="px-4 py-2.5 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/70 transition"
+                className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#016836] hover:bg-[#EDF6F1] transition"
               >
                 &larr; Register Another Parent
               </button>

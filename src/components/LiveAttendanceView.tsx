@@ -77,13 +77,13 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
           {
             label: 'Checked In',
             data: checkedInData,
-            backgroundColor: 'rgba(16, 185, 129, 0.85)',
+            backgroundColor: '#016836',
             borderRadius: 6,
           },
           {
             label: "Didn't Arrive Yet",
             data: pendingData,
-            backgroundColor: 'rgba(245, 158, 11, 0.55)',
+            backgroundColor: '#C59B43',
             borderRadius: 6,
           },
         ],
@@ -93,18 +93,18 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
         maintainAspectRatio: false,
         plugins: {
           legend: {
-            labels: { color: '#cbd5e1', font: { size: 11 } },
+            labels: { color: '#26211E', font: { size: 11, weight: 'bold' } },
           },
         },
         scales: {
           x: {
-            ticks: { color: '#94a3b8', font: { size: 11 } },
-            grid: { color: 'rgba(148, 163, 184, 0.08)' },
+            ticks: { color: '#7B6E65', font: { size: 11 } },
+            grid: { color: 'rgba(182, 173, 164, 0.25)' },
           },
           y: {
             beginAtZero: true,
-            ticks: { stepSize: 1, color: '#94a3b8', font: { size: 11 } },
-            grid: { color: 'rgba(148, 163, 184, 0.1)' },
+            ticks: { stepSize: 1, color: '#7B6E65', font: { size: 11 } },
+            grid: { color: 'rgba(182, 173, 164, 0.25)' },
           },
         },
       },
@@ -186,14 +186,14 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
         <div className="lg:col-span-7 glass-panel rounded-2xl p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-base font-bold text-white">
+              <h2 className="text-base font-bold text-[#26211E]">
                 Venue Access Points — Parent Check-In Distribution
               </h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-[#7B6E65]">
                 Live count of parents &amp; total attendees checked in vs. didn&apos;t arrive yet at each venue
               </p>
             </div>
-            <span className="text-xs font-mono text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
+            <span className="text-xs font-mono font-semibold text-[#016836] bg-[#DFF0D8] px-2.5 py-1 rounded-lg border border-[#016836]/25">
               Auto-Synced
             </span>
           </div>
@@ -201,28 +201,28 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
             {gateStats.map((st) => (
               <div
                 key={st.venue.id}
-                className="p-4 rounded-xl bg-slate-900/85 border border-slate-800 space-y-2.5"
+                className="p-4 rounded-xl bg-[#F7F4F2] border border-[#E3DBD3] space-y-2.5"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <h3 className="text-xs font-bold text-white">{st.venue.name}</h3>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      <span className="text-emerald-300 font-semibold">
+                    <h3 className="text-xs font-bold text-[#26211E]">{st.venue.name}</h3>
+                    <p className="text-[11px] text-[#7B6E65] mt-0.5">
+                      <span className="text-[#016836] font-semibold">
                         {st.checkedInCount} Checked In ({st.arrivedPasses}/{st.totalPasses} passes)
                       </span>{' '}
                       •{' '}
-                      <span className="text-amber-300 font-semibold">
+                      <span className="text-[#8A6D3B] font-semibold">
                         {st.pendingCount} Didn&apos;t Arrive Yet
                       </span>
                     </p>
                   </div>
-                  <span className="px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-sky-500/15 text-sky-300 border border-sky-500/30 shrink-0">
+                  <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-[#E6F4FA] text-[#0080BB] border border-[#0080BB]/25 shrink-0">
                     {st.pct}% arrived
                   </span>
                 </div>
-                <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                <div className="w-full h-2 rounded-full bg-[#E3DBD3] overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-emerald-400 transition-all duration-300"
+                    className="h-full rounded-full bg-gradient-to-r from-[#016836] to-[#0080BB] transition-all duration-300"
                     style={{ width: `${st.pct}%` }}
                   />
                 </div>
@@ -233,8 +233,8 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
 
         <div className="lg:col-span-5 glass-panel rounded-2xl p-5 flex flex-col justify-between">
           <div className="mb-3">
-            <h2 className="text-base font-bold text-white">Checked In vs. Didn&apos;t Arrive Yet</h2>
-            <p className="text-xs text-slate-400">Real-time parent turnout across venues</p>
+            <h2 className="text-base font-bold text-[#26211E]">Checked In vs. Didn&apos;t Arrive Yet</h2>
+            <p className="text-xs text-[#7B6E65]">Real-time parent turnout across venues</p>
           </div>
           <div className="relative h-64 w-full">
             <canvas ref={chartCanvasRef} />
@@ -244,22 +244,22 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
 
       {/* Registered Parents Master List */}
       <div className="glass-panel rounded-2xl p-5 sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-4 border-b border-slate-800">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-4 border-b border-[#E3DBD3]">
           <div>
-            <h2 className="text-base sm:text-lg font-bold text-white">
+            <h2 className="text-base sm:text-lg font-bold text-[#26211E]">
               Registered Parents Master List (VIP &amp; Regular Parents)
             </h2>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-[#7B6E65]">
               {readOnly
                 ? 'View-only live roster showing Parent #, Name, School, Contact, Attendees, Venue, and arrival status'
-                : 'Manage registered parents, inspect multi-attendee QR passes, and export live attendance'}
+                : 'Manage registered parents, inspect multi-attendee SABIS® QR passes, and export live attendance'}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={exportAttendanceCsv}
-              className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition flex items-center gap-1.5"
+              className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#016836] hover:bg-[#01522B] text-white transition flex items-center gap-1.5"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Export Attendance CSV</span>
@@ -268,7 +268,7 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
               <button
                 type="button"
                 onClick={onResetDemo}
-                className="px-3 py-2 rounded-xl text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition flex items-center gap-1.5"
+                className="px-3 py-2 rounded-xl text-xs font-semibold bg-[#F7F4F2] hover:bg-[#E3DBD3]/60 text-[#7B6E65] border border-[#E3DBD3] transition flex items-center gap-1.5"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>Reset Demo Roster</span>
@@ -284,12 +284,12 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search Parent #, Name, School, Phone..."
-            className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+            className="w-full px-3.5 py-2 rounded-xl bg-white border border-[#B6ADA4] text-xs sm:text-sm text-[#26211E] placeholder-[#7B6E65] focus:outline-none focus:border-[#016836]"
           />
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-            className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs sm:text-sm text-white focus:outline-none focus:border-indigo-500"
+            className="w-full px-3 py-2 rounded-xl bg-white border border-[#B6ADA4] text-xs sm:text-sm text-[#26211E] focus:outline-none focus:border-[#016836]"
           >
             <option value="ALL">All Statuses</option>
             <option value="CHECKED_IN">✅ Checked In (Arrived)</option>
@@ -299,7 +299,7 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
           <select
             value={tierFilter}
             onChange={(e) => setTierFilter(e.target.value as typeof tierFilter)}
-            className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs sm:text-sm text-white focus:outline-none focus:border-indigo-500"
+            className="w-full px-3 py-2 rounded-xl bg-white border border-[#B6ADA4] text-xs sm:text-sm text-[#26211E] focus:outline-none focus:border-[#016836]"
           >
             <option value="ALL">All Tiers (VIP &amp; Regular)</option>
             <option value="VIP">⭐ VIP Only</option>
@@ -308,7 +308,7 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
           <select
             value={gateFilter}
             onChange={(e) => setGateFilter(e.target.value)}
-            className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs sm:text-sm text-white focus:outline-none focus:border-indigo-500"
+            className="w-full px-3 py-2 rounded-xl bg-white border border-[#B6ADA4] text-xs sm:text-sm text-[#26211E] focus:outline-none focus:border-[#016836]"
           >
             <option value="ALL">All Venues</option>
             {venues.map((v) => (
@@ -320,10 +320,10 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
         </div>
 
         {/* Table */}
-        <div className="overflow-x-auto rounded-xl border border-slate-800">
+        <div className="overflow-x-auto rounded-xl border border-[#E3DBD3]">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-900/95 text-[11px] uppercase tracking-wider text-slate-400 border-b border-slate-800">
+              <tr className="bg-[#F7F4F2] text-[11px] uppercase tracking-wider text-[#7B6E65] border-b border-[#E3DBD3]">
                 <th className="py-3 px-4">Parent # / ID</th>
                 <th className="py-3 px-4">Parent Name &amp; School</th>
                 <th className="py-3 px-4">Contact &amp; Attendees</th>
@@ -332,10 +332,10 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
                 <th className="py-3 px-4 text-right">QR Passes</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/70 text-xs sm:text-sm">
+            <tbody className="divide-y divide-[#E3DBD3]/70 text-xs sm:text-sm bg-white">
               {filteredRoster.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-xs text-slate-400">
+                  <td colSpan={6} className="py-8 text-center text-xs text-[#7B6E65]">
                     No matching registered parents found for the current filters.
                   </td>
                 </tr>
@@ -347,53 +347,53 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
                   const school = getSchoolDisplay(reg);
 
                   return (
-                    <tr key={reg.id} className="hover:bg-slate-800/40 transition">
+                    <tr key={reg.id} className="hover:bg-[#F7F4F2]/70 transition">
                       <td className="py-3 px-4">
-                        <span className="font-mono text-xs font-bold text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+                        <span className="font-mono text-xs font-bold text-[#016836] bg-[#EDF6F1] px-2 py-0.5 rounded border border-[#016836]/25">
                           {reg.parentNumber || reg.id}
                         </span>
-                        <span className="block text-[10px] font-mono text-slate-500 mt-0.5">{reg.id}</span>
+                        <span className="block text-[10px] font-mono text-[#7B6E65] mt-0.5">{reg.id}</span>
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-semibold text-white">{reg.name}</span>
+                          <span className="font-bold text-[#26211E]">{reg.name}</span>
                           {reg.category === 'VIP' ? (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#FCF8E3] text-[#8A6D3B] border border-[#8A6D3B]/35">
                               ⭐ VIP
                             </span>
                           ) : (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#EDF6F1] text-[#016836] border border-[#016836]/25">
                               Regular
                             </span>
                           )}
                         </div>
                         {school !== 'Not specified' && (
-                          <div className="text-[11px] text-slate-400 mt-0.5 truncate max-w-xs" title={school}>
+                          <div className="text-[11px] text-[#7B6E65] mt-0.5 truncate max-w-xs" title={school}>
                             {school}
                           </div>
                         )}
                       </td>
                       <td className="py-3 px-4">
-                        <div className="font-mono text-xs text-slate-200">{reg.phone || '—'}</div>
-                        {reg.email && <div className="text-[11px] text-slate-400 truncate max-w-[180px]">{reg.email}</div>}
-                        <div className="text-[11px] text-sky-300 font-semibold mt-0.5">
+                        <div className="font-mono text-xs text-[#26211E]">{reg.phone || '—'}</div>
+                        {reg.email && <div className="text-[11px] text-[#7B6E65] truncate max-w-[180px]">{reg.email}</div>}
+                        <div className="text-[11px] text-[#0080BB] font-semibold mt-0.5">
                           {usedCount}/{reg.passes.length} QR {reg.passes.length === 1 ? 'Pass' : 'Passes'} Arrived
                         </div>
                       </td>
-                      <td className="py-3 px-4 text-xs text-slate-300">{reg.assignedGate}</td>
+                      <td className="py-3 px-4 text-xs text-[#26211E]">{reg.assignedGate}</td>
                       <td className="py-3 px-4">
                         {status === 'CHECKED_IN' && (
-                          <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[#DFF0D8] text-[#016836] border border-[#016836]/25">
                             ✅ Checked In • {formatTimeOnly(firstTime)}
                           </span>
                         )}
                         {status === 'PARTIAL' && (
-                          <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                          <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[#E6F4FA] text-[#0080BB] border border-[#0080BB]/25">
                             🟡 {usedCount}/{reg.passes.length} Arrived • {formatTimeOnly(firstTime)}
                           </span>
                         )}
                         {status === 'PENDING' && (
-                          <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                          <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[#FCF8E3] text-[#8A6D3B] border border-[#8A6D3B]/30">
                             ⏳ Didn&apos;t Arrive Yet
                           </span>
                         )}
@@ -402,7 +402,7 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
                         <button
                           type="button"
                           onClick={() => onInspectPasses(reg)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 transition"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[#016836] hover:bg-[#01522B] text-white transition"
                         >
                           <QrCode className="w-3.5 h-3.5" />
                           <span>{reg.passes.length} QR</span>
@@ -411,7 +411,7 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
                           <button
                             type="button"
                             onClick={() => onDeleteRegistration(reg.id)}
-                            className="p-1.5 rounded-lg text-rose-400 hover:bg-rose-500/20 transition align-middle"
+                            className="p-1.5 rounded-lg text-[#E53C2E] hover:bg-[#F2DEDE] transition align-middle"
                             title="Remove Registration"
                           >
                             <Trash2 className="w-3.5 h-3.5" />

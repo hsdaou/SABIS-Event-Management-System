@@ -16,16 +16,36 @@ export interface FieldToggles {
   otherAttendeeContacts: boolean;
 }
 
+export interface RequiredFields {
+  phone: boolean;
+  email: boolean;
+}
+
+export interface EventItem {
+  id: string;
+  slug: string;
+  name: string;
+  eventDate: string;
+  qrDeliveryMode: QrDeliveryMode;
+  contactDeliveryChannel: ContactDeliveryChannel;
+  strictGateMode: boolean;
+  fieldToggles: FieldToggles;
+  requiredFields: RequiredFields;
+  createdAt: string;
+}
+
 export interface EventSettings {
   eventTitle: string;
   qrDeliveryMode: QrDeliveryMode;
   contactDeliveryChannel: ContactDeliveryChannel;
   strictGateMode: boolean;
   fieldToggles: FieldToggles;
+  requiredFields: RequiredFields;
 }
 
 export interface Venue {
   id: string;
+  eventId: string;
   slug: string;
   name: string;
   capacity: number; // Visible ONLY in Control Dashboard
@@ -49,6 +69,7 @@ export interface OtherAttendeeDetail {
 
 export interface AttendeePass {
   passCode: string;
+  eventId: string;
   registrationId: string;
   passIndex: number;
   totalPasses: number;
@@ -63,6 +84,7 @@ export interface AttendeePass {
 
 export interface Registration {
   id: string;
+  eventId: string;
   parentNumber: string;
   name: string;
   phone: string;
@@ -84,6 +106,7 @@ export interface Registration {
 
 export interface ScanLog {
   id: string;
+  eventId: string;
   scannedAt: string;
   passCode: string;
   registrationId: string;

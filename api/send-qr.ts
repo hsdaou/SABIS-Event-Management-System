@@ -66,25 +66,29 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
 
     const emailHtml = `
-      <div style="font-family:Inter,Arial,sans-serif;background:#0f172a;color:#f8fafc;padding:28px;border-radius:16px;max-width:640px;margin:0 auto;">
-        <h2 style="margin:0 0 8px;color:#ffffff;">${escapeHtml(body.eventTitle || 'SABIS Event Pass')}</h2>
-        <p style="margin:0 0 18px;color:#94a3b8;font-size:14px;">
-          Dear ${escapeHtml(body.parentName || 'Guest')}, your registration is confirmed for <strong>${escapeHtml(body.venueName)}</strong> (${escapeHtml(body.tier)}).
+      <div style="font-family:Roboto,Helvetica,Arial,sans-serif;background:#F7F4F2;color:#26211E;padding:28px;border-radius:16px;max-width:640px;margin:0 auto;border:1px solid #E3DBD3;">
+        <div style="border-bottom:3px solid #016836;padding-bottom:16px;margin-bottom:18px;text-align:center;">
+          <img src="https://www.sabis.net/images/sabis-logo.svg" alt="SABIS®" height="36" style="display:inline-block;margin-bottom:10px;" />
+          <h2 style="margin:0;color:#016836;font-size:20px;">${escapeHtml(body.eventTitle || 'SABIS® Event Pass')}</h2>
+        </div>
+        <p style="margin:0 0 18px;color:#7B6E65;font-size:14px;line-height:1.6;">
+          Dear <strong style="color:#26211E;">${escapeHtml(body.parentName || 'Guest')}</strong>, your registration is confirmed for
+          <strong style="color:#016836;">${escapeHtml(body.venueName)}</strong> (${escapeHtml(body.tier)}).
           Below are your <strong>${passes.length}</strong> individual entry QR pass${passes.length > 1 ? 'es' : ''}. Each attendee must present their unique QR code at the gate.
         </p>
         ${passes
           .map(
             (p) => `
-          <div style="background:#1e293b;border:1px solid #334155;border-radius:14px;padding:18px;margin-bottom:14px;text-align:center;">
-            <div style="font-size:12px;font-weight:700;color:#818cf8;text-transform:uppercase;">Pass ${p.passIndex} of ${p.totalPasses}</div>
-            <div style="font-size:16px;font-weight:700;color:#ffffff;margin:4px 0 8px;">${escapeHtml(p.attendeeLabel || body.parentName)}</div>
-            ${p.qrDataUrl ? `<img src="${p.qrDataUrl}" alt="QR ${escapeHtml(p.passCode)}" width="180" height="180" style="background:#ffffff;padding:8px;border-radius:10px;" />` : ''}
-            <div style="font-family:monospace;font-size:13px;color:#38bdf8;margin-top:8px;">${escapeHtml(p.passCode)}</div>
+          <div style="background:#FFFFFF;border:1px solid #E3DBD3;border-top:4px solid #016836;border-radius:12px;padding:18px;margin-bottom:14px;text-align:center;">
+            <div style="font-size:12px;font-weight:700;color:#016836;text-transform:uppercase;letter-spacing:0.06em;">Pass ${p.passIndex} of ${p.totalPasses}</div>
+            <div style="font-size:16px;font-weight:700;color:#26211E;margin:4px 0 10px;">${escapeHtml(p.attendeeLabel || body.parentName)}</div>
+            ${p.qrDataUrl ? `<img src="${p.qrDataUrl}" alt="QR ${escapeHtml(p.passCode)}" width="196" height="196" style="background:#FFFFFF;padding:8px;border-radius:10px;border:1px solid #E3DBD3;" />` : ''}
+            <div style="font-family:monospace;font-size:13px;font-weight:700;color:#016836;margin-top:8px;">${escapeHtml(p.passCode)}</div>
           </div>
         `
           )
           .join('')}
-        <p style="font-size:12px;color:#64748b;margin-top:16px;text-align:center;">
+        <p style="font-size:12px;color:#7B6E65;margin-top:16px;text-align:center;">
           SABIS® Event Management System • Single-use QR verification at venue entrance
         </p>
       </div>
@@ -103,14 +107,14 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         body: JSON.stringify({
           from: fromEmail,
           to: [body.recipientEmail],
-          subject: `Your ${passes.length} Entry QR Pass${passes.length > 1 ? 'es' : ''} — ${body.eventTitle}`,
+          subject: `Your ${passes.length} SABIS® Entry QR Pass${passes.length > 1 ? 'es' : ''} — ${body.eventTitle}`,
           html: emailHtml,
         }),
       });
 
       if (response.ok) {
         emailSent = true;
-        providerNote = `Delivered ${passes.length} QR pass(es) via email to ${body.recipientEmail}`;
+        providerNote = `Delivered ${passes.length} SABIS® QR pass(es) via email to ${body.recipientEmail}`;
       } else {
         const errText = await response.text();
         providerNote = `Email provider returned ${response.status}: ${errText}`;

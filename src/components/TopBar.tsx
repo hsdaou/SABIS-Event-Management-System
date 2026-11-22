@@ -1,9 +1,9 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
+  Calendar,
   LayoutDashboard,
   LogOut,
-  QrCode,
   ShieldCheck,
   Sliders,
   Volume2,
@@ -12,7 +12,16 @@ import {
 import { useEvent } from '../context/EventContext';
 
 export const TopBar: React.FC = () => {
-  const { settings, session, isLiveSupabase, audioMuted, toggleAudioMute, logout } = useEvent();
+  const {
+    events,
+    activeEvent,
+    setActiveEventId,
+    session,
+    isLiveSupabase,
+    audioMuted,
+    toggleAudioMute,
+    logout,
+  } = useEvent();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -34,36 +43,51 @@ export const TopBar: React.FC = () => {
   };
 
   return (
-    <header className="sticky top-0 z-30 glass-panel border-b border-slate-800/80">
+    <header className="sticky top-0 z-30 bg-white border-b-2 border-[#016836] shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
-        {/* Brand */}
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-sky-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
-            <QrCode className="w-5 h-5 text-white" />
-          </div>
+        {/* Official SABIS® Logo + Event Selector */}
+        <div className="flex items-center gap-3.5 min-w-0">
+          <img
+            src="/sabis-logo.svg"
+            alt="SABIS® Logo"
+            className="h-9 sm:h-10 w-auto shrink-0"
+          />
+          <div className="h-8 w-px bg-[#E3DBD3] hidden sm:block" />
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-sm sm:text-base font-bold tracking-tight text-white truncate max-w-[260px] sm:max-w-md">
-                {settings.eventTitle}
-              </h1>
+              <div className="inline-flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-[#016836] shrink-0" />
+                <select
+                  aria-label="Select Event"
+                  value={activeEvent.id}
+                  onChange={(e) => setActiveEventId(e.target.value)}
+                  className="text-xs sm:text-sm font-bold text-[#26211E] bg-[#F7F4F2] border border-[#E3DBD3] rounded-lg px-2.5 py-1 focus:outline-none focus:border-[#016836] max-w-[230px] sm:max-w-[300px] truncate cursor-pointer"
+                >
+                  {events.map((ev) => (
+                    <option key={ev.id} value={ev.id}>
+                      {ev.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <span
                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
                   isLiveSupabase
-                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                    : 'bg-sky-500/15 text-sky-300 border-sky-500/30'
+                    ? 'bg-[#DFF0D8] text-[#016836] border-[#016836]/25'
+                    : 'bg-[#E6F4FA] text-[#0080BB] border-[#0080BB]/25'
                 }`}
               >
                 <span
                   className={`w-1.5 h-1.5 rounded-full ${
-                    isLiveSupabase ? 'bg-emerald-400 animate-pulse' : 'bg-sky-400'
+                    isLiveSupabase ? 'bg-[#016836] animate-pulse' : 'bg-[#0080BB]'
                   }`}
                 />
                 {isLiveSupabase ? 'Supabase Live' : 'Preview Sync'}
               </span>
             </div>
-            <p className="text-[11px] text-slate-400 truncate">
+            <p className="text-[11px] text-[#7B6E65] truncate mt-0.5">
               {session.fullName} ({session.email}) •{' '}
-              <span className="text-indigo-300 font-semibold">{roleBadgeLabel}</span>
+              <span className="text-[#016836] font-semibold">{roleBadgeLabel}</span>
             </p>
           </div>
         </div>
@@ -71,7 +95,7 @@ export const TopBar: React.FC = () => {
         {/* View Toggle for Authenticated Control Dashboard Users */}
         {isControl && (
           <div
-            className="flex items-center gap-1 bg-slate-900/95 p-1 rounded-xl border border-slate-700/80"
+            className="flex items-center gap-1 bg-[#F7F4F2] p-1 rounded-xl border border-[#E3DBD3]"
             role="navigation"
             aria-label="Control View Switcher"
           >
@@ -80,8 +104,8 @@ export const TopBar: React.FC = () => {
               onClick={() => navigate('/control')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
                 currentPath.startsWith('/control')
-                  ? 'bg-indigo-600 text-white shadow'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                  ? 'bg-[#016836] text-white shadow-sm'
+                  : 'text-[#7B6E65] hover:text-[#26211E] hover:bg-white'
               }`}
             >
               <Sliders className="w-3.5 h-3.5" />
@@ -92,8 +116,8 @@ export const TopBar: React.FC = () => {
               onClick={() => navigate('/dashboard')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
                 currentPath.startsWith('/dashboard')
-                  ? 'bg-sky-600 text-white shadow'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                  ? 'bg-[#0080BB] text-white shadow-sm'
+                  : 'text-[#7B6E65] hover:text-[#26211E] hover:bg-white'
               }`}
             >
               <LayoutDashboard className="w-3.5 h-3.5" />
@@ -104,8 +128,8 @@ export const TopBar: React.FC = () => {
               onClick={() => navigate('/gate')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
                 currentPath.startsWith('/gate')
-                  ? 'bg-emerald-600 text-white shadow'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                  ? 'bg-[#046937] text-white shadow-sm'
+                  : 'text-[#7B6E65] hover:text-[#26211E] hover:bg-white'
               }`}
             >
               <ShieldCheck className="w-3.5 h-3.5" />
@@ -119,17 +143,21 @@ export const TopBar: React.FC = () => {
           <button
             type="button"
             onClick={toggleAudioMute}
-            className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition"
+            className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[#F7F4F2] hover:bg-[#E3DBD3]/60 text-[#26211E] border border-[#E3DBD3] flex items-center gap-1.5 transition"
             title="Toggle Scanner Audio Feedback"
           >
-            {audioMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5 text-emerald-400" />}
+            {audioMuted ? (
+              <VolumeX className="w-3.5 h-3.5 text-[#E53C2E]" />
+            ) : (
+              <Volume2 className="w-3.5 h-3.5 text-[#016836]" />
+            )}
             <span className="hidden md:inline">{audioMuted ? 'Muted' : 'Sound'}</span>
           </button>
 
           <button
             type="button"
             onClick={handleSignOut}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-rose-600/20 hover:text-rose-300 hover:border-rose-500/40 text-slate-300 border border-slate-700 flex items-center gap-1.5 transition"
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white hover:bg-[#F2DEDE] hover:text-[#E53C2E] hover:border-[#E53C2E]/40 text-[#7B6E65] border border-[#E3DBD3] flex items-center gap-1.5 transition"
           >
             <LogOut className="w-3.5 h-3.5" />
             <span>Sign Out</span>

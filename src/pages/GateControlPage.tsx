@@ -20,7 +20,7 @@ type MobileTab = 'scanner' | 'logs';
 type InputMode = 'camera' | 'image' | 'manual';
 
 export const GateControlPage: React.FC = () => {
-  const { venues, registrations, scanLogs, scanQrCode, showToast } = useEvent();
+  const { activeEvent, venues, registrations, scanLogs, scanQrCode, showToast } = useEvent();
 
   const [mobileTab, setMobileTab] = useState<MobileTab>('scanner');
   const [inputMode, setInputMode] = useState<InputMode>('camera');
@@ -34,6 +34,12 @@ export const GateControlPage: React.FC = () => {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const lastDecodedRef = useRef<{ code: string; ts: number }>({ code: '', ts: 0 });
   const activeGateRef = useRef(activeGate);
+
+  useEffect(() => {
+    if (venues.length > 0 && !venues.some((v) => v.name === activeGate)) {
+      setActiveGate(venues[0].name);
+    }
+  }, [activeGate, venues]);
 
   useEffect(() => {
     activeGateRef.current = activeGate;
@@ -61,7 +67,6 @@ export const GateControlPage: React.FC = () => {
 
   const handleDecodedScan = async (raw: string) => {
     const now = Date.now();
-    // Prevent rapid accidental double-scans within 2.5s of the exact same frame
     if (lastDecodedRef.current.code === raw && now - lastDecodedRef.current.ts < 2500) {
       return;
     }
@@ -85,7 +90,7 @@ export const GateControlPage: React.FC = () => {
         () => {}
       );
       setCameraRunning(true);
-      setCameraStatus('Live camera active — hold QR pass steady inside the frame.');
+      setCameraStatus('Live camera active — hold SABIS® QR pass steady inside the frame.');
     } catch {
       setCameraStatus('Camera unavailable on this device/browser — switched to Manual / Quick Scan.');
       showToast('Camera unavailable; switched to Manual / Quick Scan mode.', 'warning');
@@ -134,19 +139,26 @@ export const GateControlPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-950">
+    <div className="min-h-screen flex flex-col bg-[#F7F4F2]">
       <TopBar />
 
       <main className="max-w-3xl mx-auto w-full px-4 py-5 space-y-5 flex-1">
+        <div className="text-center">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-[#016836]">
+            {activeEvent.name}
+          </span>
+          <h2 className="text-lg font-bold text-[#26211E]">Mobile Gate Control Terminal</h2>
+        </div>
+
         {/* Mobile Gate Control Mode Tabs */}
-        <div className="grid grid-cols-2 gap-2 bg-slate-900 p-1.5 rounded-2xl border border-slate-800">
+        <div className="grid grid-cols-2 gap-2 bg-white p-1.5 rounded-2xl border border-[#E3DBD3] shadow-sm">
           <button
             type="button"
             onClick={() => setMobileTab('scanner')}
             className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition ${
               mobileTab === 'scanner'
-                ? 'bg-emerald-600 text-white shadow'
-                : 'text-slate-300 hover:text-white'
+                ? 'bg-[#016836] text-white shadow-sm'
+                : 'text-[#7B6E65] hover:text-[#26211E]'
             }`}
           >
             <QrCode className="w-4 h-4" />
@@ -160,8 +172,8 @@ export const GateControlPage: React.FC = () => {
             }}
             className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition ${
               mobileTab === 'logs'
-                ? 'bg-indigo-600 text-white shadow'
-                : 'text-slate-300 hover:text-white'
+                ? 'bg-[#0080BB] text-white shadow-sm'
+                : 'text-[#7B6E65] hover:text-[#26211E]'
             }`}
           >
             <Clock className="w-4 h-4" />
@@ -172,15 +184,15 @@ export const GateControlPage: React.FC = () => {
         {mobileTab === 'scanner' ? (
           <div className="space-y-5">
             {/* Active Venue Selector */}
-            <div className="glass-panel rounded-2xl p-4 space-y-3">
+            <div className="glass-panel rounded-2xl p-4 sm:p-5 border-t-4 border-t-[#016836] space-y-3.5">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                <label className="block text-xs font-bold text-[#26211E] mb-1.5">
                   Active Venue Gate
                 </label>
                 <select
                   value={activeGate}
                   onChange={(e) => setActiveGate(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-sm font-semibold text-white focus:outline-none focus:border-emerald-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#B6ADA4] text-sm font-bold text-[#26211E] focus:outline-none focus:border-[#016836]"
                 >
                   {venues.map((v) => (
                     <option key={v.id} value={v.name}>
@@ -191,14 +203,14 @@ export const GateControlPage: React.FC = () => {
               </div>
 
               {/* Input Method Switcher */}
-              <div className="grid grid-cols-3 gap-1.5 bg-slate-900 p-1 rounded-xl border border-slate-800">
+              <div className="grid grid-cols-3 gap-1.5 bg-[#F7F4F2] p-1 rounded-xl border border-[#E3DBD3]">
                 <button
                   type="button"
                   onClick={() => setInputMode('camera')}
-                  className={`py-2 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition ${
+                  className={`py-2 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition ${
                     inputMode === 'camera'
-                      ? 'bg-sky-600 text-white'
-                      : 'text-slate-300 hover:text-white'
+                      ? 'bg-[#016836] text-white'
+                      : 'text-[#7B6E65] hover:text-[#26211E]'
                   }`}
                 >
                   <Camera className="w-3.5 h-3.5" />
@@ -210,10 +222,10 @@ export const GateControlPage: React.FC = () => {
                     if (cameraRunning) stopCamera();
                     setInputMode('image');
                   }}
-                  className={`py-2 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition ${
+                  className={`py-2 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition ${
                     inputMode === 'image'
-                      ? 'bg-sky-600 text-white'
-                      : 'text-slate-300 hover:text-white'
+                      ? 'bg-[#016836] text-white'
+                      : 'text-[#7B6E65] hover:text-[#26211E]'
                   }`}
                 >
                   <ImageIcon className="w-3.5 h-3.5" />
@@ -225,10 +237,10 @@ export const GateControlPage: React.FC = () => {
                     if (cameraRunning) stopCamera();
                     setInputMode('manual');
                   }}
-                  className={`py-2 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition ${
+                  className={`py-2 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition ${
                     inputMode === 'manual'
-                      ? 'bg-sky-600 text-white'
-                      : 'text-slate-300 hover:text-white'
+                      ? 'bg-[#016836] text-white'
+                      : 'text-[#7B6E65] hover:text-[#26211E]'
                   }`}
                 >
                   <Keyboard className="w-3.5 h-3.5" />
@@ -239,7 +251,7 @@ export const GateControlPage: React.FC = () => {
               {/* Camera Mode */}
               {inputMode === 'camera' && (
                 <div className="space-y-3">
-                  <div className="relative rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 min-h-[250px] flex flex-col items-center justify-center p-4">
+                  <div className="relative rounded-2xl overflow-hidden bg-[#26211E] border border-[#E3DBD3] min-h-[250px] flex flex-col items-center justify-center p-4">
                     <div id="mobileQrReader" className="w-full max-w-sm mx-auto" />
                     {cameraRunning && (
                       <div className="absolute inset-x-8 top-4 pointer-events-none">
@@ -248,30 +260,30 @@ export const GateControlPage: React.FC = () => {
                     )}
                     {!cameraRunning && (
                       <div className="text-center space-y-3 py-5">
-                        <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mx-auto">
-                          <Camera className="w-6 h-6 text-emerald-400" />
+                        <div className="w-12 h-12 rounded-2xl bg-[#016836]/25 border border-[#016836] flex items-center justify-center mx-auto">
+                          <Camera className="w-6 h-6 text-[#DFF0D8]" />
                         </div>
-                        <p className="text-sm font-bold text-white">Mobile Gate QR Camera</p>
-                        <p className="text-xs text-slate-400 max-w-xs mx-auto">
-                          Scan each attendee&apos;s individual QR code to verify VALID, USED, or INVALID status immediately.
+                        <p className="text-sm font-bold text-white">SABIS® Mobile Gate QR Camera</p>
+                        <p className="text-xs text-[#E3DBD3] max-w-xs mx-auto">
+                          Scan each attendee&apos;s individual SABIS® QR code to verify VALID, USED, or INVALID status immediately.
                         </p>
                         <button
                           type="button"
                           onClick={startCamera}
-                          className="px-5 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/25 transition"
+                          className="px-5 py-2.5 rounded-xl text-xs font-bold bg-[#016836] hover:bg-[#046937] text-white shadow-lg transition"
                         >
                           Start Camera Scanner
                         </button>
                       </div>
                     )}
                   </div>
-                  <div className="flex items-center justify-between text-xs text-slate-400">
+                  <div className="flex items-center justify-between text-xs text-[#7B6E65]">
                     <span>{cameraStatus}</span>
                     {cameraRunning && (
                       <button
                         type="button"
                         onClick={stopCamera}
-                        className="px-3 py-1 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1"
+                        className="px-3 py-1 rounded-lg bg-[#F2DEDE] text-[#E53C2E] border border-[#E53C2E]/30 flex items-center gap-1 font-semibold"
                       >
                         <StopCircle className="w-3.5 h-3.5" /> Stop
                       </button>
@@ -282,11 +294,11 @@ export const GateControlPage: React.FC = () => {
 
               {/* Image Upload Mode */}
               {inputMode === 'image' && (
-                <div className="rounded-2xl border-2 border-dashed border-slate-700 bg-slate-900/60 p-6 text-center space-y-3">
+                <div className="rounded-2xl border-2 border-dashed border-[#B6ADA4] bg-[#F7F4F2] p-6 text-center space-y-3">
                   <div id="mobileQrImageDecoder" className="hidden" />
-                  <ImageIcon className="w-8 h-8 text-indigo-400 mx-auto" />
-                  <p className="text-sm font-semibold text-white">Upload QR Pass Screenshot / Image</p>
-                  <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition">
+                  <ImageIcon className="w-8 h-8 text-[#016836] mx-auto" />
+                  <p className="text-sm font-bold text-[#26211E]">Upload SABIS® QR Pass Screenshot / Image</p>
+                  <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-[#016836] hover:bg-[#01522B] text-white transition">
                     <span>Choose QR Image File</span>
                     <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
                   </label>
@@ -297,7 +309,7 @@ export const GateControlPage: React.FC = () => {
               {inputMode === 'manual' && (
                 <div className="space-y-4">
                   <form onSubmit={handleManualSubmit} className="space-y-2">
-                    <label className="block text-xs font-semibold text-slate-300">
+                    <label className="block text-xs font-bold text-[#26211E]">
                       Enter Pass Code (e.g., EVT-2026-1004-1) or Parent #
                     </label>
                     <div className="flex gap-2">
@@ -306,38 +318,43 @@ export const GateControlPage: React.FC = () => {
                         value={manualCode}
                         onChange={(e) => setManualCode(e.target.value)}
                         placeholder="EVT-2026-1004-1 or PAR-11530"
-                        className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs sm:text-sm font-mono text-white focus:outline-none focus:border-indigo-500"
+                        className="flex-1 px-3.5 py-2.5 rounded-xl bg-white border border-[#B6ADA4] text-xs sm:text-sm font-mono text-[#26211E] focus:outline-none focus:border-[#016836]"
                       />
                       <button
                         type="submit"
-                        className="px-4 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition"
+                        className="px-4 py-2.5 rounded-xl text-xs font-bold bg-[#016836] hover:bg-[#01522B] text-white transition"
                       >
                         Verify
                       </button>
                     </div>
                   </form>
 
-                  <div className="pt-3 border-t border-slate-800 space-y-2.5">
-                    <label className="block text-xs font-semibold text-slate-300">
+                  <div className="pt-3 border-t border-[#E3DBD3] space-y-2.5">
+                    <label className="block text-xs font-bold text-[#26211E]">
                       Quick Pass Test (Select Registered Pass)
                     </label>
                     <div className="flex flex-col sm:flex-row gap-2">
                       <select
                         value={selectedSimPass}
                         onChange={(e) => setSelectedSimPass(e.target.value)}
-                        className="flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white"
+                        className="flex-1 px-3 py-2 rounded-xl bg-white border border-[#B6ADA4] text-xs text-[#26211E]"
                       >
-                        {allPasses.map(({ reg, pass }) => (
-                          <option key={pass.passCode} value={pass.passCode}>
-                            [{pass.status === 'USED' ? 'USED' : 'VALID'}] {pass.passCode} —{' '}
-                            {pass.attendeeLabel} ({pass.passIndex}/{pass.totalPasses})
-                          </option>
-                        ))}
+                        {allPasses.length === 0 ? (
+                          <option value="">No passes registered for this event yet</option>
+                        ) : (
+                          allPasses.map(({ pass }) => (
+                            <option key={pass.passCode} value={pass.passCode}>
+                              [{pass.status === 'USED' ? 'USED' : 'VALID'}] {pass.passCode} —{' '}
+                              {pass.attendeeLabel} ({pass.passIndex}/{pass.totalPasses})
+                            </option>
+                          ))
+                        )}
                       </select>
                       <button
                         type="button"
+                        disabled={allPasses.length === 0}
                         onClick={simulateSelected}
-                        className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shrink-0"
+                        className="px-4 py-2 rounded-xl text-xs font-bold bg-[#016836] hover:bg-[#01522B] text-white shrink-0 disabled:opacity-40"
                       >
                         Scan Pass
                       </button>
@@ -348,7 +365,7 @@ export const GateControlPage: React.FC = () => {
                         const res = await scanQrCode('FAKE-PASS-9999', activeGate);
                         setLastResult(res);
                       }}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30"
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#F2DEDE] hover:bg-[#E53C2E] hover:text-white text-[#E53C2E] border border-[#E53C2E]/35 transition"
                     >
                       Test Invalid QR Code
                     </button>
@@ -360,84 +377,82 @@ export const GateControlPage: React.FC = () => {
             {/* Instant High-Contrast Scan Verdict Banner (VALID / USED / INVALID) */}
             {lastResult && (
               <div
-                className={`glass-panel rounded-2xl p-5 border-2 transition-all space-y-4 ${
+                className={`rounded-2xl p-5 border-2 shadow-md transition-all space-y-4 ${
                   lastResult.status === 'VALID'
-                    ? 'border-emerald-500 bg-emerald-950/30'
+                    ? 'border-[#016836] bg-[#DFF0D8]'
                     : lastResult.status === 'USED'
-                    ? 'border-amber-500 bg-amber-950/30'
-                    : 'border-rose-500 bg-rose-950/30'
+                    ? 'border-[#8A6D3B] bg-[#FCF8E3]'
+                    : 'border-[#E53C2E] bg-[#F2DEDE]'
                 }`}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3">
-                    <div
-                      className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
-                        lastResult.status === 'VALID'
-                          ? 'bg-emerald-500 text-slate-950'
-                          : lastResult.status === 'USED'
-                          ? 'bg-amber-400 text-slate-950'
-                          : 'bg-rose-500 text-white'
-                      }`}
-                    >
-                      {lastResult.status === 'VALID' && <CheckCircle2 className="w-7 h-7" />}
-                      {lastResult.status === 'USED' && <AlertTriangle className="w-7 h-7" />}
-                      {lastResult.status === 'INVALID' && <XCircle className="w-7 h-7" />}
+                <div className="flex items-start gap-3">
+                  <div
+                    className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 text-white ${
+                      lastResult.status === 'VALID'
+                        ? 'bg-[#016836]'
+                        : lastResult.status === 'USED'
+                        ? 'bg-[#8A6D3B]'
+                        : 'bg-[#E53C2E]'
+                    }`}
+                  >
+                    {lastResult.status === 'VALID' && <CheckCircle2 className="w-7 h-7" />}
+                    {lastResult.status === 'USED' && <AlertTriangle className="w-7 h-7" />}
+                    {lastResult.status === 'INVALID' && <XCircle className="w-7 h-7" />}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold text-white ${
+                          lastResult.status === 'VALID'
+                            ? 'bg-[#016836]'
+                            : lastResult.status === 'USED'
+                            ? 'bg-[#8A6D3B]'
+                            : 'bg-[#E53C2E]'
+                        }`}
+                      >
+                        {lastResult.status}
+                      </span>
+                      <span className="text-xs font-mono font-bold text-[#26211E]">
+                        Scanned at {formatTimeOnly(lastResult.scannedAt)}
+                      </span>
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span
-                          className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold ${
-                            lastResult.status === 'VALID'
-                              ? 'bg-emerald-500 text-slate-950'
-                              : lastResult.status === 'USED'
-                              ? 'bg-amber-400 text-slate-950'
-                              : 'bg-rose-500 text-white'
-                          }`}
-                        >
-                          {lastResult.status}
-                        </span>
-                        <span className="text-xs font-mono text-slate-300">
-                          Scanned at {formatTimeOnly(lastResult.scannedAt)}
-                        </span>
-                      </div>
-                      <h3 className="text-lg font-extrabold text-white mt-1">
-                        {lastResult.headline}
-                      </h3>
-                      <p className="text-xs text-slate-200 mt-0.5">{lastResult.subtext}</p>
-                      {lastResult.status === 'USED' && lastResult.firstUsedAt && (
-                        <p className="text-xs font-mono font-bold text-amber-300 mt-1">
-                          Previously Used At: {formatTimeOnly(lastResult.firstUsedAt)}
-                        </p>
-                      )}
-                    </div>
+                    <h3 className="text-lg font-extrabold text-[#26211E] mt-1">
+                      {lastResult.headline}
+                    </h3>
+                    <p className="text-xs text-[#26211E]/85 mt-0.5">{lastResult.subtext}</p>
+                    {lastResult.status === 'USED' && lastResult.firstUsedAt && (
+                      <p className="text-xs font-mono font-bold text-[#8A6D3B] mt-1">
+                        Previously Used At: {formatTimeOnly(lastResult.firstUsedAt)}
+                      </p>
+                    )}
                   </div>
                 </div>
 
                 {lastResult.registration && lastResult.pass && (
-                  <div className="grid grid-cols-2 gap-2.5 text-xs bg-slate-950/70 rounded-xl p-3.5 border border-slate-800">
+                  <div className="grid grid-cols-2 gap-2.5 text-xs bg-white rounded-xl p-3.5 border border-[#E3DBD3]">
                     <div>
-                      <span className="text-slate-400 block text-[11px]">Attendee &amp; Pass</span>
-                      <span className="font-bold text-white">
+                      <span className="text-[#7B6E65] block text-[11px]">Attendee &amp; Pass</span>
+                      <span className="font-bold text-[#26211E]">
                         {lastResult.pass.attendeeLabel} ({lastResult.pass.passIndex}/
                         {lastResult.pass.totalPasses})
                       </span>
                     </div>
                     <div>
-                      <span className="text-slate-400 block text-[11px]">Pass Code</span>
-                      <span className="font-mono font-bold text-sky-300">
+                      <span className="text-[#7B6E65] block text-[11px]">Pass Code</span>
+                      <span className="font-mono font-bold text-[#016836]">
                         {lastResult.pass.passCode}
                       </span>
                     </div>
                     <div>
-                      <span className="text-slate-400 block text-[11px]">Tier &amp; Parent #</span>
-                      <span className="font-semibold text-slate-200">
+                      <span className="text-[#7B6E65] block text-[11px]">Tier &amp; Parent #</span>
+                      <span className="font-semibold text-[#26211E]">
                         {lastResult.registration.category} •{' '}
                         {lastResult.registration.parentNumber || lastResult.registration.id}
                       </span>
                     </div>
                     <div>
-                      <span className="text-slate-400 block text-[11px]">School</span>
-                      <span className="font-semibold text-slate-200 truncate block">
+                      <span className="text-[#7B6E65] block text-[11px]">School</span>
+                      <span className="font-semibold text-[#26211E] truncate block">
                         {getSchoolDisplay(lastResult.registration)}
                       </span>
                     </div>
@@ -446,7 +461,6 @@ export const GateControlPage: React.FC = () => {
               </div>
             )}
 
-            {/* Recent Timing Logs Preview */}
             <EventLogsPanel logs={scanLogs} canClear={false} compact={true} />
           </div>
         ) : (

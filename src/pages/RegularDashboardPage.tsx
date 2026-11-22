@@ -13,34 +13,37 @@ import type { Registration } from '../types';
 type RegularTab = 'landing' | 'attendance' | 'logs';
 
 export const RegularDashboardPage: React.FC = () => {
-  const { venues, registrations, scanLogs } = useEvent();
+  const { activeEvent, venues, registrations, scanLogs } = useEvent();
   const [activeTab, setActiveTab] = useState<RegularTab>('landing');
   const [inspectingReg, setInspectingReg] = useState<Registration | null>(null);
 
   const arrivedCount = registrations.filter((r) => getRegistrationStatus(r) !== 'PENDING').length;
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-950">
+    <div className="min-h-screen flex flex-col bg-[#F7F4F2]">
       <TopBar />
 
       <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 space-y-6 flex-1">
         {/* Clean Navigation Bar — NO Settings, NO Link Generation, NO Max Capacity */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg sm:text-xl font-bold text-white">Event Dashboard</h2>
-            <p className="text-xs text-slate-400">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[#016836]">
+              {activeEvent.name}
+            </span>
+            <h2 className="text-lg sm:text-xl font-bold text-[#26211E]">Event Dashboard</h2>
+            <p className="text-xs text-[#7B6E65]">
               Click any summary card below to inspect live details, register walk-ins at the desk, or track live attendance
             </p>
           </div>
 
-          <nav className="flex flex-wrap items-center gap-1.5 bg-slate-900/90 p-1.5 rounded-xl border border-slate-800">
+          <nav className="flex flex-wrap items-center gap-1.5 bg-white p-1.5 rounded-xl border border-[#E3DBD3] shadow-sm">
             <button
               type="button"
               onClick={() => setActiveTab('landing')}
               className={`px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold flex items-center gap-1.5 transition ${
                 activeTab === 'landing'
-                  ? 'bg-indigo-600 text-white shadow'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                  ? 'bg-[#016836] text-white shadow-sm'
+                  : 'text-[#7B6E65] hover:text-[#26211E] hover:bg-[#F7F4F2]'
               }`}
             >
               <LayoutDashboard className="w-4 h-4" />
@@ -51,13 +54,19 @@ export const RegularDashboardPage: React.FC = () => {
               onClick={() => setActiveTab('attendance')}
               className={`px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold flex items-center gap-1.5 transition ${
                 activeTab === 'attendance'
-                  ? 'bg-indigo-600 text-white shadow'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                  ? 'bg-[#016836] text-white shadow-sm'
+                  : 'text-[#7B6E65] hover:text-[#26211E] hover:bg-[#F7F4F2]'
               }`}
             >
               <Activity className="w-4 h-4" />
               <span>Live Attendance</span>
-              <span className="px-1.5 py-0.2 rounded-full text-[11px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              <span
+                className={`px-1.5 py-0.2 rounded-full text-[11px] border ${
+                  activeTab === 'attendance'
+                    ? 'bg-white/20 text-white border-white/30'
+                    : 'bg-[#DFF0D8] text-[#016836] border-[#016836]/25'
+                }`}
+              >
                 {arrivedCount}/{registrations.length}
               </span>
             </button>
@@ -66,8 +75,8 @@ export const RegularDashboardPage: React.FC = () => {
               onClick={() => setActiveTab('logs')}
               className={`px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold flex items-center gap-1.5 transition ${
                 activeTab === 'logs'
-                  ? 'bg-indigo-600 text-white shadow'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                  ? 'bg-[#016836] text-white shadow-sm'
+                  : 'text-[#7B6E65] hover:text-[#26211E] hover:bg-[#F7F4F2]'
               }`}
             >
               <Clock className="w-4 h-4" />
@@ -76,7 +85,7 @@ export const RegularDashboardPage: React.FC = () => {
           </nav>
         </div>
 
-        {/* Clickable KPI Cards (matching the attached photo, clickable to show full details) */}
+        {/* Clickable KPI Cards */}
         <KpiStrip
           registrations={registrations}
           scanLogs={scanLogs}

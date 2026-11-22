@@ -22,8 +22,9 @@ const RequireRole: React.FC<{ allowed: UserRole[]; children: React.ReactNode }> 
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-sm text-slate-400">
-        Loading SABIS® Event Management System...
+      <div className="min-h-screen bg-[#F7F4F2] flex flex-col items-center justify-center gap-3 text-sm text-[#7B6E65]">
+        <img src="/sabis-logo.svg" alt="SABIS®" className="h-10 w-auto" />
+        <span>Loading SABIS® Event Management System...</span>
       </div>
     );
   }
@@ -44,8 +45,7 @@ const RootRedirect: React.FC = () => {
   const location = useLocation();
   const params = new URLSearchParams(location.search);
 
-  // Backward compatibility for links with ?venue=... or ?mode=parent
-  if (params.has('venue') || params.get('mode') === 'parent') {
+  if (params.has('venue') || params.has('event') || params.get('mode') === 'parent') {
     return <Navigate to={`/register${location.search}`} replace />;
   }
 
@@ -70,16 +70,16 @@ const ToastOverlay: React.FC = () => {
 
   const toneStyle =
     toast.tone === 'success'
-      ? 'border-emerald-500/50 text-emerald-200'
+      ? 'bg-[#DFF0D8] border-[#016836] text-[#016836]'
       : toast.tone === 'warning'
-      ? 'border-amber-500/50 text-amber-200'
+      ? 'bg-[#FCF8E3] border-[#8A6D3B] text-[#8A6D3B]'
       : toast.tone === 'error'
-      ? 'border-rose-500/50 text-rose-200'
-      : 'border-indigo-500/50 text-slate-100';
+      ? 'bg-[#F2DEDE] border-[#E53C2E] text-[#A94442]'
+      : 'bg-white border-[#016836] text-[#26211E]';
 
   return (
     <div
-      className={`fixed bottom-5 right-5 z-50 px-4 py-3 rounded-xl bg-slate-900/95 border shadow-2xl text-xs font-semibold max-w-sm ${toneStyle}`}
+      className={`fixed bottom-5 right-5 z-50 px-4 py-3 rounded-xl border-l-4 border shadow-xl text-xs font-bold max-w-sm ${toneStyle}`}
     >
       {toast.text}
     </div>

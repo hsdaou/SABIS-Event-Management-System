@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Download, Printer, QrCode, Search, UserPlus } from 'lucide-react';
 import { useEvent } from '../context/EventContext';
 import { buildPassQrPayload, downloadPassPng, formatTimeOnly, getSchoolDisplay } from '../lib/qr';
@@ -13,7 +13,6 @@ interface StaffDeskRegistrationProps {
 export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ onInspectAllPasses }) => {
   const { settings, venues, registrations, createRegistration, showToast } = useEvent();
 
-  // Registration form state
   const [parentNumber, setParentNumber] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -29,10 +28,15 @@ export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ on
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Pass Lookup state
   const [lookupQuery, setLookupQuery] = useState('');
   const [selectedRegId, setSelectedRegId] = useState<string>(registrations[0]?.id || '');
   const [activePassIdx, setActivePassIdx] = useState(0);
+
+  useEffect(() => {
+    if (venues.length > 0 && !venues.some((v) => v.name === assignedGate)) {
+      setAssignedGate(venues[0].name);
+    }
+  }, [assignedGate, venues]);
 
   const handlePartySizeChange = (val: number) => {
     const clamped = Math.max(1, Math.min(20, val || 1));
@@ -82,7 +86,7 @@ export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ on
       setOtherAttendees([]);
       setNotes('');
       showToast(
-        `Registered ${registration.name} & generated ${registration.passes.length} QR pass(es)!`,
+        `Registered ${registration.name} & generated ${registration.passes.length} SABIS® QR pass(es)!`,
         'success'
       );
     } finally {
@@ -116,14 +120,14 @@ export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ on
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
       {/* Left: Staff Desk Manual Registration */}
       <div className="lg:col-span-7 glass-panel rounded-2xl p-5 sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-2 pb-4 mb-5 border-b border-slate-800">
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-4 mb-5 border-b border-[#E3DBD3]">
           <div>
-            <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-              <UserPlus className="w-5 h-5 text-indigo-400" />
+            <h2 className="text-base sm:text-lg font-bold text-[#26211E] flex items-center gap-2">
+              <UserPlus className="w-5 h-5 text-[#016836]" />
               <span>Staff Desk Manual Registration &amp; Pass Lookup</span>
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Register a walk-in parent/VIP on-site (generates 1 QR code per attendee) or look up existing passes
+            <p className="text-xs text-[#7B6E65] mt-0.5">
+              Register a walk-in parent/VIP on-site (generates 1 SABIS® QR code per attendee) or look up existing passes
             </p>
           </div>
         </div>
@@ -131,18 +135,18 @@ export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ on
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
             <div>
-              <label className="block text-xs font-semibold text-indigo-300 mb-1">Parent Number</label>
+              <label className="block text-xs font-bold text-[#016836] mb-1">Parent Number</label>
               <input
                 type="text"
                 value={parentNumber}
                 onChange={(e) => setParentNumber(e.target.value)}
                 placeholder="e.g., PAR-1042"
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/95 border border-slate-700 text-sm font-mono text-white placeholder-slate-500 focus:outline-none focus:border-indigo-400"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#B6ADA4] text-sm font-mono text-[#26211E] placeholder-[#7B6E65]/70 focus:outline-none focus:border-[#016836]"
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold text-indigo-300 mb-1">
-                Full Name <span className="text-rose-400">*</span>
+              <label className="block text-xs font-bold text-[#016836] mb-1">
+                Full Name <span className="text-[#E53C2E]">*</span>
               </label>
               <input
                 type="text"
@@ -150,35 +154,41 @@ export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ on
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., Nadia Khoury"
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/95 border border-slate-700 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-400"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#B6ADA4] text-sm text-[#26211E] placeholder-[#7B6E65]/70 focus:outline-none focus:border-[#016836]"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Phone Number</label>
+              <label className="block text-xs font-bold text-[#26211E] mb-1">
+                Phone Number {settings.requiredFields.phone && <span className="text-[#E53C2E]">*</span>}
+              </label>
               <input
                 type="tel"
+                required={settings.requiredFields.phone}
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="+971 50 482 1900"
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/95 border border-slate-700 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-400"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#B6ADA4] text-sm text-[#26211E] placeholder-[#7B6E65]/70 focus:outline-none focus:border-[#016836]"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Email Address</label>
+              <label className="block text-xs font-bold text-[#26211E] mb-1">
+                Email Address {settings.requiredFields.email && <span className="text-[#E53C2E]">*</span>}
+              </label>
               <input
                 type="email"
+                required={settings.requiredFields.email}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="parent@example.com"
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/95 border border-slate-700 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-400"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#B6ADA4] text-sm text-[#26211E] placeholder-[#7B6E65]/70 focus:outline-none focus:border-[#016836]"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-indigo-300 mb-1">
-                Number of Attendees <span className="text-rose-400">*</span>
+              <label className="block text-xs font-bold text-[#016836] mb-1">
+                Number of Attendees <span className="text-[#E53C2E]">*</span>
               </label>
               <input
                 type="number"
@@ -187,18 +197,18 @@ export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ on
                 required
                 value={partySize}
                 onChange={(e) => handlePartySizeChange(parseInt(e.target.value, 10))}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/95 border border-indigo-500/40 text-sm text-white focus:outline-none focus:border-indigo-400"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#016836]/40 text-sm text-[#26211E] focus:outline-none focus:border-[#016836]"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1">Assigned Venue</label>
+              <label className="block text-xs font-semibold text-[#7B6E65] mb-1">Assigned Venue</label>
               <select
                 value={assignedGate}
                 onChange={(e) => setAssignedGate(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/90 border border-slate-700 text-sm text-white focus:outline-none focus:border-indigo-500"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#B6ADA4] text-sm text-[#26211E] focus:outline-none focus:border-[#016836]"
               >
                 {venues.map((v) => (
                   <option key={v.id} value={v.name}>
@@ -208,11 +218,11 @@ export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ on
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1">Invitation Tier</label>
+              <label className="block text-xs font-semibold text-[#7B6E65] mb-1">Invitation Tier</label>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value as 'Regular Parent' | 'VIP')}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/90 border border-slate-700 text-sm text-white focus:outline-none focus:border-indigo-500"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#B6ADA4] text-sm text-[#26211E] focus:outline-none focus:border-[#016836]"
               >
                 <option value="Regular Parent">Regular Parent</option>
                 <option value="VIP">⭐ VIP</option>
@@ -229,14 +239,13 @@ export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ on
             onChangeOther={setSchoolOther}
           />
 
-          {/* Dynamic Ages & Additional Attendee Contacts */}
-          <details className="bg-slate-900/50 rounded-xl border border-slate-800 px-3.5 py-2.5">
-            <summary className="text-xs font-medium text-slate-300 cursor-pointer select-none">
+          <details className="bg-[#F7F4F2] rounded-xl border border-[#E3DBD3] px-3.5 py-2.5">
+            <summary className="text-xs font-semibold text-[#26211E] cursor-pointer select-none">
               Attendee Ages, Other Attendee Contact Details &amp; Notes (Optional)
             </summary>
             <div className="pt-3 space-y-3">
               <div>
-                <p className="text-[11px] font-semibold text-slate-400 mb-1.5">
+                <p className="text-[11px] font-bold text-[#7B6E65] mb-1.5">
                   Age of Attendees ({partySize})
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -253,7 +262,7 @@ export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ on
                         copy[idx] = e.target.value;
                         setAttendeeAges(copy);
                       }}
-                      className="px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white"
+                      className="px-2.5 py-1.5 rounded-lg bg-white border border-[#B6ADA4] text-xs text-[#26211E]"
                     />
                   ))}
                 </div>
@@ -261,7 +270,7 @@ export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ on
 
               {partySize > 1 && (
                 <div className="space-y-2">
-                  <p className="text-[11px] font-semibold text-slate-400">
+                  <p className="text-[11px] font-bold text-[#7B6E65]">
                     Contact Details of Other Attendee(s)
                   </p>
                   {otherAttendees.map((other, idx) => (
@@ -275,7 +284,7 @@ export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ on
                           copy[idx] = { ...copy[idx], name: e.target.value };
                           setOtherAttendees(copy);
                         }}
-                        className="px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white"
+                        className="px-2.5 py-1.5 rounded-lg bg-white border border-[#B6ADA4] text-xs text-[#26211E]"
                       />
                       <input
                         type="text"
@@ -286,7 +295,7 @@ export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ on
                           copy[idx] = { ...copy[idx], contact: e.target.value };
                           setOtherAttendees(copy);
                         }}
-                        className="px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white"
+                        className="px-2.5 py-1.5 rounded-lg bg-white border border-[#B6ADA4] text-xs text-[#26211E]"
                       />
                     </div>
                   ))}
@@ -298,20 +307,20 @@ export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ on
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Optional desk note"
-                className="w-full px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white"
+                className="w-full px-3 py-1.5 rounded-lg bg-white border border-[#B6ADA4] text-xs text-[#26211E]"
               />
             </div>
           </details>
 
-          <div className="pt-1 flex flex-wrap items-center gap-3">
+          <div className="pt-1">
             <button
               type="submit"
               disabled={submitting}
-              className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-500 hover:to-sky-500 text-white shadow-lg shadow-indigo-600/25 transition flex items-center gap-2 disabled:opacity-50"
+              className="px-5 py-2.5 rounded-xl text-sm font-bold bg-[#016836] hover:bg-[#01522B] text-white shadow-md shadow-[#016836]/20 transition flex items-center gap-2 disabled:opacity-50"
             >
               <QrCode className="w-4 h-4" />
               <span>
-                Register &amp; Generate {partySize} QR {partySize === 1 ? 'Pass' : 'Passes'}
+                Register &amp; Generate {partySize} SABIS® QR {partySize === 1 ? 'Pass' : 'Passes'}
               </span>
             </button>
           </div>
@@ -322,27 +331,27 @@ export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ on
       <div className="lg:col-span-5 glass-panel rounded-2xl p-5 sm:p-6 space-y-4">
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-white">Pass Lookup &amp; QR Inspector</h2>
+            <h2 className="text-base font-bold text-[#26211E]">Pass Lookup &amp; QR Inspector</h2>
             {selectedReg && (
-              <span className="text-xs font-semibold text-sky-300 bg-sky-500/15 px-2.5 py-0.5 rounded-full border border-sky-500/30">
+              <span className="text-xs font-bold text-[#016836] bg-[#DFF0D8] px-2.5 py-0.5 rounded-full border border-[#016836]/25">
                 {selectedReg.passes.length} QR {selectedReg.passes.length === 1 ? 'Pass' : 'Passes'}
               </span>
             )}
           </div>
 
           <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-[#7B6E65] absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={lookupQuery}
               onChange={(e) => setLookupQuery(e.target.value)}
               placeholder="Lookup by Parent #, Name, Phone, Email, or Pass ID..."
-              className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+              className="w-full pl-9 pr-3 py-2 rounded-xl bg-white border border-[#B6ADA4] text-xs text-[#26211E] placeholder-[#7B6E65] focus:outline-none focus:border-[#016836]"
             />
           </div>
 
           {lookupMatches.length > 0 && (
-            <div className="rounded-xl bg-slate-950 border border-slate-700 divide-y divide-slate-800 max-h-44 overflow-y-auto">
+            <div className="rounded-xl bg-white border border-[#E3DBD3] shadow-md divide-y divide-[#E3DBD3] max-h-44 overflow-y-auto">
               {lookupMatches.map((r) => (
                 <button
                   key={r.id}
@@ -352,15 +361,15 @@ export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ on
                     setActivePassIdx(0);
                     setLookupQuery('');
                   }}
-                  className="w-full px-3 py-2 text-left hover:bg-slate-800/80 flex items-center justify-between gap-2 transition"
+                  className="w-full px-3 py-2 text-left hover:bg-[#F7F4F2] flex items-center justify-between gap-2 transition"
                 >
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold text-white truncate">{r.name}</p>
-                    <p className="text-[11px] font-mono text-slate-400 truncate">
+                    <p className="text-xs font-bold text-[#26211E] truncate">{r.name}</p>
+                    <p className="text-[11px] font-mono text-[#7B6E65] truncate">
                       {r.parentNumber || r.id} • {r.assignedGate}
                     </p>
                   </div>
-                  <span className="text-[10px] font-bold text-indigo-300 shrink-0">
+                  <span className="text-[10px] font-bold text-[#016836] shrink-0">
                     {r.passes.length} QR
                   </span>
                 </button>
@@ -374,77 +383,82 @@ export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ on
             <div
               className={`${
                 selectedReg.category === 'VIP'
-                  ? 'vip-pass-gradient border-amber-500/40'
-                  : 'pass-gradient border-indigo-500/30'
-              } rounded-2xl p-5 border shadow-xl printable-pass-area`}
+                  ? 'vip-pass-gradient border-[#8A6D3B]/40 border-t-4 border-t-[#8A6D3B]'
+                  : 'pass-gradient border-[#E3DBD3] border-t-4 border-t-[#016836]'
+              } rounded-2xl p-5 border shadow-sm printable-pass-area`}
             >
-              <div className="flex items-start justify-between gap-2 border-b border-slate-700/80 pb-3 mb-3">
-                <div className="min-w-0">
-                  <p className="text-[11px] uppercase tracking-wider text-indigo-400 font-semibold">
-                    Pass {activePass.passIndex} of {activePass.totalPasses}
-                  </p>
-                  <h3 className="text-base font-bold text-white truncate mt-0.5">
-                    {activePass.attendeeLabel || selectedReg.name}
-                  </h3>
-                  <p className="text-xs font-mono text-sky-300 mt-0.5">
-                    Parent #: {selectedReg.parentNumber || selectedReg.id}
-                  </p>
-                </div>
+              <div className="flex items-center justify-between border-b border-[#E3DBD3] pb-3 mb-3">
+                <img src="/sabis-logo.svg" alt="SABIS®" className="h-7 w-auto" />
                 <span
                   className={`px-2 py-0.5 rounded-lg text-[11px] font-bold border shrink-0 ${
                     selectedReg.category === 'VIP'
-                      ? 'bg-amber-500/25 text-amber-300 border-amber-400/40'
-                      : 'bg-indigo-500/20 text-indigo-200 border-indigo-400/30'
+                      ? 'bg-[#FCF8E3] text-[#8A6D3B] border-[#8A6D3B]/40'
+                      : 'bg-[#DFF0D8] text-[#016836] border-[#016836]/25'
                   }`}
                 >
                   {selectedReg.category === 'VIP' ? '⭐ VIP' : 'Regular'}
                 </span>
               </div>
 
+              <div className="mb-3">
+                <p className="text-[11px] uppercase tracking-wider text-[#016836] font-bold">
+                  Pass {activePass.passIndex} of {activePass.totalPasses}
+                </p>
+                <h3 className="text-base font-bold text-[#26211E] truncate mt-0.5">
+                  {activePass.attendeeLabel || selectedReg.name}
+                </h3>
+                <p className="text-xs font-mono text-[#7B6E65] mt-0.5">
+                  Parent #: {selectedReg.parentNumber || selectedReg.id}
+                </p>
+              </div>
+
               <div className="flex flex-col items-center my-3">
-                <div className="bg-white p-3 rounded-2xl shadow-lg border-4 border-indigo-500/20">
-                  <QrCodeImage payload={buildPassQrPayload(selectedReg, activePass)} size={184} />
+                <div
+                  className={`bg-white p-3 rounded-2xl shadow-sm border-2 ${
+                    selectedReg.category === 'VIP' ? 'border-[#8A6D3B]/40' : 'border-[#016836]/30'
+                  }`}
+                >
+                  <QrCodeImage payload={buildPassQrPayload(selectedReg, activePass)} size={188} />
                 </div>
-                <p className="mt-2.5 font-mono text-xs font-bold tracking-widest text-sky-300 bg-slate-900/90 px-3 py-1 rounded-md border border-slate-700">
+                <p className="mt-2.5 font-mono text-xs font-bold tracking-widest text-[#016836] bg-white px-3 py-1 rounded-md border border-[#E3DBD3]">
                   {activePass.passCode}
                 </p>
               </div>
 
-              {/* Pass Stepper for Multi-Attendee Registrations */}
               {selectedReg.passes.length > 1 && (
-                <div className="flex items-center justify-between gap-2 mb-3 bg-slate-900/80 rounded-xl p-2 border border-slate-800 print:hidden">
+                <div className="flex items-center justify-between gap-2 mb-3 bg-white rounded-xl p-2 border border-[#E3DBD3] print:hidden">
                   <button
                     type="button"
                     disabled={safePassIdx === 0}
                     onClick={() => setActivePassIdx((i) => Math.max(0, i - 1))}
-                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 disabled:opacity-40"
+                    className="p-1.5 rounded-lg bg-[#F7F4F2] hover:bg-[#E3DBD3]/70 text-[#26211E] disabled:opacity-40"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
-                  <span className="text-xs font-semibold text-slate-200">
+                  <span className="text-xs font-bold text-[#26211E]">
                     Viewing Pass {safePassIdx + 1} of {selectedReg.passes.length}
                   </span>
                   <button
                     type="button"
                     disabled={safePassIdx >= selectedReg.passes.length - 1}
                     onClick={() => setActivePassIdx((i) => Math.min(selectedReg.passes.length - 1, i + 1))}
-                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 disabled:opacity-40"
+                    className="p-1.5 rounded-lg bg-[#F7F4F2] hover:bg-[#E3DBD3]/70 text-[#26211E] disabled:opacity-40"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-2.5 text-xs bg-slate-900/65 rounded-xl p-3 border border-slate-800">
+              <div className="grid grid-cols-2 gap-2.5 text-xs bg-white/90 rounded-xl p-3 border border-[#E3DBD3]">
                 <div>
-                  <span className="text-slate-400 block text-[11px]">Assigned Venue</span>
-                  <span className="font-semibold text-white block truncate">{selectedReg.assignedGate}</span>
+                  <span className="text-[#7B6E65] block text-[11px]">Assigned Venue</span>
+                  <span className="font-bold text-[#26211E] block truncate">{selectedReg.assignedGate}</span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block text-[11px]">Pass Status</span>
+                  <span className="text-[#7B6E65] block text-[11px]">Pass Status</span>
                   <span
-                    className={`font-semibold ${
-                      activePass.status === 'USED' ? 'text-emerald-400' : 'text-amber-300'
+                    className={`font-bold ${
+                      activePass.status === 'USED' ? 'text-[#016836]' : 'text-[#8A6D3B]'
                     }`}
                   >
                     {activePass.status === 'USED'
@@ -453,8 +467,8 @@ export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ on
                   </span>
                 </div>
                 <div className="col-span-2">
-                  <span className="text-slate-400 block text-[11px]">School</span>
-                  <span className="font-medium text-slate-200 block truncate">
+                  <span className="text-[#7B6E65] block text-[11px]">School</span>
+                  <span className="font-medium text-[#26211E] block truncate">
                     {getSchoolDisplay(selectedReg)}
                   </span>
                 </div>
@@ -465,7 +479,7 @@ export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ on
               <button
                 type="button"
                 onClick={() => downloadPassPng(selectedReg, activePass, settings.eventTitle)}
-                className="px-2.5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center gap-1 transition"
+                className="px-2.5 py-2 rounded-xl text-xs font-semibold bg-[#016836] hover:bg-[#01522B] text-white flex items-center justify-center gap-1 transition"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>Save PNG</span>
@@ -473,15 +487,15 @@ export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ on
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="px-2.5 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center gap-1 transition"
+                className="px-2.5 py-2 rounded-xl text-xs font-semibold bg-white hover:bg-[#F7F4F2] text-[#26211E] border border-[#E3DBD3] flex items-center justify-center gap-1 transition"
               >
-                <Printer className="w-3.5 h-3.5" />
+                <Printer className="w-3.5 h-3.5 text-[#016836]" />
                 <span>Print</span>
               </button>
               <button
                 type="button"
                 onClick={() => onInspectAllPasses(selectedReg)}
-                className="px-2.5 py-2 rounded-xl text-xs font-semibold bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 flex items-center justify-center gap-1 transition"
+                className="px-2.5 py-2 rounded-xl text-xs font-semibold bg-[#E6F4FA] hover:bg-[#0080BB] hover:text-white text-[#0080BB] border border-[#0080BB]/30 flex items-center justify-center gap-1 transition"
               >
                 <QrCode className="w-3.5 h-3.5" />
                 <span>All ({selectedReg.passes.length})</span>
@@ -489,7 +503,7 @@ export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ on
             </div>
           </>
         ) : (
-          <p className="text-xs text-slate-500 py-8 text-center">No registrations available yet.</p>
+          <p className="text-xs text-[#7B6E65] py-8 text-center">No registrations for this event yet.</p>
         )}
       </div>
     </div>

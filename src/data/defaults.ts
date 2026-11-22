@@ -1,27 +1,43 @@
-import type { AuthorizedUser, EventSettings, Registration, ScanLog, Venue } from '../types';
+import type { AuthorizedUser, EventItem, FieldToggles, Registration, RequiredFields, ScanLog, Venue } from '../types';
 
-export const DEFAULT_SETTINGS: EventSettings = {
-  eventTitle: 'SABIS® Parent Event Registration & Gate Check-In',
-  qrDeliveryMode: 'on_screen',
-  contactDeliveryChannel: 'both',
-  strictGateMode: false,
-  fieldToggles: {
-    parentNumber: true,
-    fullName: true,
-    phone: true,
-    email: true,
-    numAttendees: true,
-    school: true,
-    attendeeAges: true,
-    otherAttendeeContacts: true,
-  },
+export const DEFAULT_FIELD_TOGGLES: FieldToggles = {
+  parentNumber: true,
+  fullName: true,
+  phone: true,
+  email: true,
+  numAttendees: true,
+  school: true,
+  attendeeAges: true,
+  otherAttendeeContacts: true,
 };
 
+export const DEFAULT_REQUIRED_FIELDS: RequiredFields = {
+  phone: true,
+  email: true,
+};
+
+export const DEFAULT_EVENT_ID = 'evt-default';
+
+export const DEFAULT_EVENTS: EventItem[] = [
+  {
+    id: DEFAULT_EVENT_ID,
+    slug: 'sabis-annual-parent-event',
+    name: 'SABIS® Annual Parent & Student Event',
+    eventDate: '2026-11-22',
+    qrDeliveryMode: 'on_screen',
+    contactDeliveryChannel: 'both',
+    strictGateMode: false,
+    fieldToggles: { ...DEFAULT_FIELD_TOGGLES },
+    requiredFields: { ...DEFAULT_REQUIRED_FIELDS },
+    createdAt: '2026-11-20T07:00:00.000Z',
+  },
+];
+
 export const DEFAULT_VENUES: Venue[] = [
-  { id: 'GATE-A', slug: 'gate-a-main-campus-entrance', name: 'Gate A - Main Campus Entrance', capacity: 150, sortOrder: 1 },
-  { id: 'GATE-B', slug: 'gate-b-auditorium-stage', name: 'Gate B - Auditorium & Stage', capacity: 120, sortOrder: 2 },
-  { id: 'GATE-C', slug: 'gate-c-primary-section-gate', name: 'Gate C - Primary Section Gate', capacity: 100, sortOrder: 3 },
-  { id: 'GATE-D', slug: 'gate-d-sports-exhibition-hall', name: 'Gate D - Sports & Exhibition Hall', capacity: 100, sortOrder: 4 },
+  { id: 'GATE-A', eventId: DEFAULT_EVENT_ID, slug: 'gate-a-main-campus-entrance', name: 'Gate A - Main Campus Entrance', capacity: 150, sortOrder: 1 },
+  { id: 'GATE-B', eventId: DEFAULT_EVENT_ID, slug: 'gate-b-auditorium-stage', name: 'Gate B - Auditorium & Stage', capacity: 120, sortOrder: 2 },
+  { id: 'GATE-C', eventId: DEFAULT_EVENT_ID, slug: 'gate-c-primary-section-gate', name: 'Gate C - Primary Section Gate', capacity: 100, sortOrder: 3 },
+  { id: 'GATE-D', eventId: DEFAULT_EVENT_ID, slug: 'gate-d-sports-exhibition-hall', name: 'Gate D - Sports & Exhibition Hall', capacity: 100, sortOrder: 4 },
 ];
 
 export const DEFAULT_AUTHORIZED_USERS: AuthorizedUser[] = [
@@ -57,6 +73,7 @@ export const DEFAULT_AUTHORIZED_USERS: AuthorizedUser[] = [
 export const DEFAULT_REGISTRATIONS: Registration[] = [
   {
     id: 'EVT-2026-1001',
+    eventId: DEFAULT_EVENT_ID,
     parentNumber: 'PAR-10421',
     name: 'Nadia Khoury',
     phone: '+971 52 910 3341',
@@ -76,6 +93,7 @@ export const DEFAULT_REGISTRATIONS: Registration[] = [
     passes: [
       {
         passCode: 'EVT-2026-1001-1',
+        eventId: DEFAULT_EVENT_ID,
         registrationId: 'EVT-2026-1001',
         passIndex: 1,
         totalPasses: 2,
@@ -89,6 +107,7 @@ export const DEFAULT_REGISTRATIONS: Registration[] = [
       },
       {
         passCode: 'EVT-2026-1001-2',
+        eventId: DEFAULT_EVENT_ID,
         registrationId: 'EVT-2026-1001',
         passIndex: 2,
         totalPasses: 2,
@@ -104,6 +123,7 @@ export const DEFAULT_REGISTRATIONS: Registration[] = [
   },
   {
     id: 'EVT-2026-1002',
+    eventId: DEFAULT_EVENT_ID,
     parentNumber: 'PAR-10894',
     name: 'Tariq Al-Qasimi',
     phone: '+971 50 482 1900',
@@ -126,6 +146,7 @@ export const DEFAULT_REGISTRATIONS: Registration[] = [
     passes: [
       {
         passCode: 'EVT-2026-1002-1',
+        eventId: DEFAULT_EVENT_ID,
         registrationId: 'EVT-2026-1002',
         passIndex: 1,
         totalPasses: 3,
@@ -139,6 +160,7 @@ export const DEFAULT_REGISTRATIONS: Registration[] = [
       },
       {
         passCode: 'EVT-2026-1002-2',
+        eventId: DEFAULT_EVENT_ID,
         registrationId: 'EVT-2026-1002',
         passIndex: 2,
         totalPasses: 3,
@@ -152,6 +174,7 @@ export const DEFAULT_REGISTRATIONS: Registration[] = [
       },
       {
         passCode: 'EVT-2026-1002-3',
+        eventId: DEFAULT_EVENT_ID,
         registrationId: 'EVT-2026-1002',
         passIndex: 3,
         totalPasses: 3,
@@ -167,6 +190,7 @@ export const DEFAULT_REGISTRATIONS: Registration[] = [
   },
   {
     id: 'EVT-2026-1003',
+    eventId: DEFAULT_EVENT_ID,
     parentNumber: 'PAR-11205',
     name: 'Omar Farooq',
     phone: '+971 55 301 7782',
@@ -186,6 +210,7 @@ export const DEFAULT_REGISTRATIONS: Registration[] = [
     passes: [
       {
         passCode: 'EVT-2026-1003-1',
+        eventId: DEFAULT_EVENT_ID,
         registrationId: 'EVT-2026-1003',
         passIndex: 1,
         totalPasses: 1,
@@ -201,6 +226,7 @@ export const DEFAULT_REGISTRATIONS: Registration[] = [
   },
   {
     id: 'EVT-2026-1004',
+    eventId: DEFAULT_EVENT_ID,
     parentNumber: 'PAR-11530',
     name: 'Rami Sleiman',
     phone: '+971 50 774 8821',
@@ -220,6 +246,7 @@ export const DEFAULT_REGISTRATIONS: Registration[] = [
     passes: [
       {
         passCode: 'EVT-2026-1004-1',
+        eventId: DEFAULT_EVENT_ID,
         registrationId: 'EVT-2026-1004',
         passIndex: 1,
         totalPasses: 2,
@@ -233,6 +260,7 @@ export const DEFAULT_REGISTRATIONS: Registration[] = [
       },
       {
         passCode: 'EVT-2026-1004-2',
+        eventId: DEFAULT_EVENT_ID,
         registrationId: 'EVT-2026-1004',
         passIndex: 2,
         totalPasses: 2,
@@ -248,6 +276,7 @@ export const DEFAULT_REGISTRATIONS: Registration[] = [
   },
   {
     id: 'EVT-2026-1005',
+    eventId: DEFAULT_EVENT_ID,
     parentNumber: 'PAR-11892',
     name: 'Sara Al-Hashemi',
     phone: '+971 56 219 6400',
@@ -270,6 +299,7 @@ export const DEFAULT_REGISTRATIONS: Registration[] = [
     passes: [
       {
         passCode: 'EVT-2026-1005-1',
+        eventId: DEFAULT_EVENT_ID,
         registrationId: 'EVT-2026-1005',
         passIndex: 1,
         totalPasses: 3,
@@ -283,6 +313,7 @@ export const DEFAULT_REGISTRATIONS: Registration[] = [
       },
       {
         passCode: 'EVT-2026-1005-2',
+        eventId: DEFAULT_EVENT_ID,
         registrationId: 'EVT-2026-1005',
         passIndex: 2,
         totalPasses: 3,
@@ -296,6 +327,7 @@ export const DEFAULT_REGISTRATIONS: Registration[] = [
       },
       {
         passCode: 'EVT-2026-1005-3',
+        eventId: DEFAULT_EVENT_ID,
         registrationId: 'EVT-2026-1005',
         passIndex: 3,
         totalPasses: 3,
@@ -311,6 +343,7 @@ export const DEFAULT_REGISTRATIONS: Registration[] = [
   },
   {
     id: 'EVT-2026-1006',
+    eventId: DEFAULT_EVENT_ID,
     parentNumber: 'PAR-12044',
     name: 'Karim Haddad',
     phone: '+971 54 883 1102',
@@ -330,6 +363,7 @@ export const DEFAULT_REGISTRATIONS: Registration[] = [
     passes: [
       {
         passCode: 'EVT-2026-1006-1',
+        eventId: DEFAULT_EVENT_ID,
         registrationId: 'EVT-2026-1006',
         passIndex: 1,
         totalPasses: 2,
@@ -343,6 +377,7 @@ export const DEFAULT_REGISTRATIONS: Registration[] = [
       },
       {
         passCode: 'EVT-2026-1006-2',
+        eventId: DEFAULT_EVENT_ID,
         registrationId: 'EVT-2026-1006',
         passIndex: 2,
         totalPasses: 2,
@@ -361,6 +396,7 @@ export const DEFAULT_REGISTRATIONS: Registration[] = [
 export const DEFAULT_SCAN_LOGS: ScanLog[] = [
   {
     id: 'log-1',
+    eventId: DEFAULT_EVENT_ID,
     scannedAt: '2026-11-20T08:55:39.000Z',
     passCode: 'EVT-2026-1003-1',
     registrationId: 'EVT-2026-1003',
@@ -374,6 +410,7 @@ export const DEFAULT_SCAN_LOGS: ScanLog[] = [
   },
   {
     id: 'log-2',
+    eventId: DEFAULT_EVENT_ID,
     scannedAt: '2026-11-20T08:51:20.000Z',
     passCode: 'EVT-2026-1002-3',
     registrationId: 'EVT-2026-1002',
@@ -387,6 +424,7 @@ export const DEFAULT_SCAN_LOGS: ScanLog[] = [
   },
   {
     id: 'log-3',
+    eventId: DEFAULT_EVENT_ID,
     scannedAt: '2026-11-20T08:42:15.000Z',
     passCode: 'EVT-2026-1001-1',
     registrationId: 'EVT-2026-1001',

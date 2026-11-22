@@ -28,9 +28,9 @@ export const QrCodeImage: React.FC<QrCodeImageProps> = ({ payload, size = 196, c
     return (
       <div
         style={{ width: size, height: size }}
-        className={`rounded-xl bg-slate-200 animate-pulse flex items-center justify-center text-xs text-slate-500 ${className}`}
+        className={`rounded-xl bg-[#F7F4F2] border border-[#E3DBD3] animate-pulse flex items-center justify-center text-xs text-[#7B6E65] ${className}`}
       >
-        Generating QR...
+        Generating SABIS® QR...
       </div>
     );
   }
@@ -38,7 +38,7 @@ export const QrCodeImage: React.FC<QrCodeImageProps> = ({ payload, size = 196, c
   return (
     <img
       src={src}
-      alt="Entry QR Code"
+      alt="SABIS® Entry QR Code"
       width={size}
       height={size}
       className={`rounded-lg block ${className}`}
