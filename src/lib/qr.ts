@@ -206,7 +206,7 @@ export async function downloadPassPng(
   ctx.fillStyle = accent;
   ctx.font = 'bold 12px Roboto, Arial, sans-serif';
   ctx.fillText(
-    `${isVip ? 'VIP INVITATION PASS' : 'REGULAR PARENT PASS'}  •  PASS ${pass.passIndex} OF ${pass.totalPasses}`,
+    `${isVip ? 'VIP' : 'PARENT'}  •  PASS ${pass.passIndex} OF ${pass.totalPasses}`,
     canvas.width / 2,
     142
   );

@@ -190,7 +190,7 @@ export const EventLogsPanel: React.FC<EventLogsPanelProps> = ({
                     </span>
                     {log.tier === 'VIP' && (
                       <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#FCF8E3] text-[#8A6D3B] border border-[#8A6D3B]/35">
-                        ⭐ VIP
+                        VIP
                       </span>
                     )}
                     <span className="text-xs sm:text-sm font-bold text-[#26211E] truncate">

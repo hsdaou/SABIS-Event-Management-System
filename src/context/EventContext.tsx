@@ -39,7 +39,7 @@ export interface CreateRegistrationInput {
   schoolType: 'sabis_isc' | 'other' | '';
   schoolBranch: string;
   schoolOther: string;
-  category: 'VIP' | 'Regular Parent';
+  category: 'VIP' | 'Parent';
   assignedGate: string;
   partySize: number;
   attendeeAges: string[];
@@ -126,7 +126,7 @@ interface EventContextValue {
   ) => Promise<{ registration: Registration; dispatchMessage?: string }>;
   importCsvRegistrations: (
     venueName: string,
-    tier: 'VIP' | 'Regular Parent',
+    tier: 'VIP' | 'Parent',
     rows: Array<{
       parentNumber: string;
       name: string;
@@ -198,9 +198,10 @@ function loadLocalState(): LocalStoredState {
           Array.isArray(parsed.authorizedUsers) && parsed.authorizedUsers.length > 0
             ? parsed.authorizedUsers
             : DEFAULT_AUTHORIZED_USERS,
-        registrations: Array.isArray(parsed.registrations)
+      registrations: Array.isArray(parsed.registrations)
           ? parsed.registrations.map((r) => ({
               ...r,
+              category: r.category === 'VIP' ? 'VIP' : 'Parent',
               eventId: r.eventId || DEFAULT_EVENT_ID,
               passes: (r.passes || []).map((p) => ({
                 ...p,
@@ -487,7 +488,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             schoolType: (r.school_type || '') as Registration['schoolType'],
             schoolBranch: r.school_branch || '',
             schoolOther: r.school_other || '',
-            category: r.category === 'VIP' ? 'VIP' : 'Regular Parent',
+            category: r.category === 'VIP' ? 'VIP' : 'Parent',
             assignedGate: r.assigned_gate,
             partySize: r.party_size || 1,
             attendeeAges: Array.isArray(r.attendee_ages) ? r.attendee_ages : [],
@@ -511,7 +512,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             registrationId: l.registration_id || '',
             parentNumber: l.parent_number || '',
             attendeeName: l.attendee_name || '',
-            tier: l.tier || '',
+            tier: l.tier === 'Regular Parent' ? 'Parent' : l.tier || '',
             gate: l.gate || '',
             status: (l.status || 'INVALID') as ScanOutcome,
             message: l.message || '',
@@ -1149,7 +1150,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const importCsvRegistrations = useCallback(
     async (
       venueName: string,
-      tier: 'VIP' | 'Regular Parent',
+      tier: 'VIP' | 'Parent',
       rows: Array<{
         parentNumber: string;
         name: string;

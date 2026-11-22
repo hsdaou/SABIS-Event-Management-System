@@ -19,7 +19,7 @@ export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ on
   const [email, setEmail] = useState('');
   const [partySizeInput, setPartySizeInput] = useState('1');
   const [assignedGate, setAssignedGate] = useState(venues[0]?.name || 'Gate A - Main Campus Entrance');
-  const [category, setCategory] = useState<'Regular Parent' | 'VIP'>('Regular Parent');
+  const [category, setCategory] = useState<'Parent' | 'VIP'>('Parent');
   const [schoolType, setSchoolType] = useState<'sabis_isc' | 'other' | ''>('');
   const [schoolBranch, setSchoolBranch] = useState('');
   const [schoolOther, setSchoolOther] = useState('');
@@ -232,11 +232,11 @@ export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ on
               <label className="block text-xs font-semibold text-[#7B6E65] mb-1">Invitation Tier</label>
               <select
                 value={category}
-                onChange={(e) => setCategory(e.target.value as 'Regular Parent' | 'VIP')}
+                onChange={(e) => setCategory(e.target.value as 'Parent' | 'VIP')}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#B6ADA4] text-sm text-[#26211E] focus:outline-none focus:border-[#016836]"
               >
-                <option value="Regular Parent">Regular Parent</option>
-                <option value="VIP">⭐ VIP</option>
+                <option value="Parent">Parent</option>
+                <option value="VIP">VIP</option>
               </select>
             </div>
           </div>
@@ -407,7 +407,7 @@ export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ on
                       : 'bg-[#DFF0D8] text-[#016836] border-[#016836]/25'
                   }`}
                 >
-                  {selectedReg.category === 'VIP' ? '⭐ VIP' : 'Regular'}
+                  {selectedReg.category === 'VIP' ? 'VIP' : 'Parent'}
                 </span>
               </div>
 

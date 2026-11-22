@@ -161,7 +161,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const eventTitle = body.eventTitle || 'SABIS® Event Pass';
     const parentName = body.parentName || 'Guest';
     const venueName = body.venueName || 'Main Campus Entrance';
-    const tier = body.tier || 'Regular Parent';
+    const tier = body.tier || 'Parent';
 
     // Build inline CID attachments for Gmail / Outlook / Apple Mail compatibility
     const attachments: Array<{

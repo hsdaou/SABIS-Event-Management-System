@@ -23,7 +23,7 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
 }) => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'CHECKED_IN' | 'PARTIAL' | 'PENDING'>('ALL');
-  const [tierFilter, setTierFilter] = useState<'ALL' | 'VIP' | 'Regular Parent'>('ALL');
+  const [tierFilter, setTierFilter] = useState<'ALL' | 'VIP' | 'Parent'>('ALL');
   const [gateFilter, setGateFilter] = useState<string>('ALL');
 
   const chartCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -247,7 +247,7 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-4 border-b border-[#E3DBD3]">
           <div>
             <h2 className="text-base sm:text-lg font-bold text-[#26211E]">
-              Registered Parents Master List (VIP &amp; Regular Parents)
+              Registered Parents Master List (VIP &amp; Parent)
             </h2>
             <p className="text-xs text-[#7B6E65]">
               {readOnly
@@ -301,9 +301,9 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
             onChange={(e) => setTierFilter(e.target.value as typeof tierFilter)}
             className="w-full px-3 py-2 rounded-xl bg-white border border-[#B6ADA4] text-xs sm:text-sm text-[#26211E] focus:outline-none focus:border-[#016836]"
           >
-            <option value="ALL">All Tiers (VIP &amp; Regular)</option>
-            <option value="VIP">⭐ VIP Only</option>
-            <option value="Regular Parent">Regular Parents Only</option>
+            <option value="ALL">All Tiers (VIP &amp; Parent)</option>
+            <option value="VIP">VIP Only</option>
+            <option value="Parent">Parent Only</option>
           </select>
           <select
             value={gateFilter}
@@ -359,11 +359,11 @@ export const LiveAttendanceView: React.FC<LiveAttendanceViewProps> = ({
                           <span className="font-bold text-[#26211E]">{reg.name}</span>
                           {reg.category === 'VIP' ? (
                             <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#FCF8E3] text-[#8A6D3B] border border-[#8A6D3B]/35">
-                              ⭐ VIP
+                              VIP
                             </span>
                           ) : (
                             <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#EDF6F1] text-[#016836] border border-[#016836]/25">
-                              Regular
+                              Parent
                             </span>
                           )}
                         </div>

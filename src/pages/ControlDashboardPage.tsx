@@ -197,7 +197,7 @@ export const ControlDashboardPage: React.FC = () => {
     showToast(`Created new event "${created.name}"!`, 'success');
   };
 
-  const getInvitationUrl = (venue: Venue, tier: 'regular' | 'vip') => {
+  const getInvitationUrl = (venue: Venue, tier: 'parent' | 'vip') => {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     return `${origin}/register?event=${encodeURIComponent(activeEvent.slug)}&venue=${encodeURIComponent(
       venue.slug
@@ -258,7 +258,7 @@ export const ControlDashboardPage: React.FC = () => {
   const handleVenueCsvUpload = (
     e: React.ChangeEvent<HTMLInputElement>,
     venue: Venue,
-    tier: 'VIP' | 'Regular Parent'
+    tier: 'VIP' | 'Parent'
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -468,7 +468,7 @@ export const ControlDashboardPage: React.FC = () => {
                   <a
                     href={`/register?event=${encodeURIComponent(activeEvent.slug)}&venue=${encodeURIComponent(
                       venues[0]?.slug || ''
-                    )}&tier=regular`}
+                    )}&tier=parent`}
                     target="_blank"
                     rel="noreferrer"
                     className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#EDF6F1] hover:bg-[#DFF0D8] text-[#016836] border border-[#016836]/25 flex items-center gap-1.5 transition"
@@ -1094,7 +1094,7 @@ export const ControlDashboardPage: React.FC = () => {
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E3DBD3] pb-3.5">
                 <div>
                   <h3 className="text-base font-bold text-[#26211E]">
-                    Link Generation (VIP &amp; Regular) + Per-Venue CSV Uploads — {activeEvent.name}
+                    Link Generation (VIP &amp; Parent) + Per-Venue CSV Uploads — {activeEvent.name}
                   </h3>
                   <p className="text-xs text-[#7B6E65] mt-0.5">
                     Each link is locked to this event, venue, and invitation tier (exclusive to Control Dashboard).
@@ -1112,11 +1112,11 @@ export const ControlDashboardPage: React.FC = () => {
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {venues.map((v) => {
-                  const regUrl = getInvitationUrl(v, 'regular');
+                  const parentUrl = getInvitationUrl(v, 'parent');
                   const vipUrl = getInvitationUrl(v, 'vip');
                   const venueRegs = registrations.filter((r) => r.assignedGate === v.name);
                   const vipCount = venueRegs.filter((r) => r.category === 'VIP').length;
-                  const regCount = venueRegs.length - vipCount;
+                  const parentCount = venueRegs.length - vipCount;
                   const totalPasses = venueRegs.reduce((s, r) => s + r.passes.length, 0);
 
                   return (
@@ -1128,20 +1128,20 @@ export const ControlDashboardPage: React.FC = () => {
                         <h4 className="text-sm font-bold text-[#26211E]">{v.name}</h4>
                         <p className="text-[11px] text-[#7B6E65] mt-0.5">
                           <span className="text-[#8A6D3B] font-bold">{vipCount} VIP</span> •{' '}
-                          <span className="text-[#016836] font-bold">{regCount} Regular</span> •{' '}
+                          <span className="text-[#016836] font-bold">{parentCount} Parent</span> •{' '}
                           {totalPasses} passes issued{' '}
                           <span className="text-[#7B6E65]">(Max Cap: {v.capacity})</span>
                         </p>
                       </div>
 
-                      {/* Regular Link */}
+                      {/* Parent Link */}
                       <div className="p-3 rounded-lg bg-white border border-[#016836]/25 space-y-2">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-[11px] font-bold text-[#016836] uppercase tracking-wider">
-                            Regular Parents Link &amp; CSV
+                            Parent Link &amp; CSV
                           </span>
                           <a
-                            href={regUrl}
+                            href={parentUrl}
                             target="_blank"
                             rel="noreferrer"
                             className="text-[11px] font-semibold text-[#016836] hover:underline flex items-center gap-1"
@@ -1150,12 +1150,12 @@ export const ControlDashboardPage: React.FC = () => {
                           </a>
                         </div>
                         <div className="bg-[#F7F4F2] border border-[#E3DBD3] rounded px-2.5 py-1.5 text-[11px] font-mono text-[#0080BB] truncate">
-                          {regUrl}
+                          {parentUrl}
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5">
                           <button
                             type="button"
-                            onClick={() => copyText(regUrl, `Copied Regular link for ${v.name}`)}
+                            onClick={() => copyText(parentUrl, `Copied Parent link for ${v.name}`)}
                             className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-[#016836] hover:bg-[#01522B] text-white flex items-center gap-1 transition"
                           >
                             <Copy className="w-3 h-3" /> Copy Link
@@ -1164,8 +1164,8 @@ export const ControlDashboardPage: React.FC = () => {
                             type="button"
                             onClick={() =>
                               copyText(
-                                `Dear Parent, please register for "${activeEvent.name}" (${v.name}) at: ${regUrl}`,
-                                `Copied Regular WhatsApp invite for ${v.name}`
+                                `Dear Parent, please register for "${activeEvent.name}" (${v.name}) at: ${parentUrl}`,
+                                `Copied Parent WhatsApp invite for ${v.name}`
                               )
                             }
                             className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-[#DFF0D8] hover:bg-[#016836] hover:text-white text-[#016836] border border-[#016836]/25 transition"
@@ -1173,11 +1173,11 @@ export const ControlDashboardPage: React.FC = () => {
                             WhatsApp Invite
                           </button>
                           <label className="cursor-pointer px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-[#F7F4F2] hover:bg-[#E3DBD3]/70 text-[#26211E] border border-[#E3DBD3] transition inline-flex items-center gap-1 ml-auto">
-                            <Upload className="w-3 h-3 text-[#016836]" /> Regular CSV
+                            <Upload className="w-3 h-3 text-[#016836]" /> Parent CSV
                             <input
                               type="file"
                               accept=".csv,text/csv"
-                              onChange={(e) => handleVenueCsvUpload(e, v, 'Regular Parent')}
+                              onChange={(e) => handleVenueCsvUpload(e, v, 'Parent')}
                               className="hidden"
                             />
                           </label>
@@ -1188,7 +1188,7 @@ export const ControlDashboardPage: React.FC = () => {
                       <div className="p-3 rounded-lg bg-[#FCF8E3]/60 border border-[#8A6D3B]/35 space-y-2">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-[11px] font-bold text-[#8A6D3B] uppercase tracking-wider">
-                            ⭐ VIP Invitation Link &amp; CSV
+                            VIP Invitation Link &amp; CSV
                           </span>
                           <a
                             href={vipUrl}

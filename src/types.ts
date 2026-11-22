@@ -98,7 +98,7 @@ export interface Registration {
   schoolType: 'sabis_isc' | 'other' | '';
   schoolBranch: string;
   schoolOther: string;
-  category: 'VIP' | 'Regular Parent';
+  category: 'VIP' | 'Parent';
   assignedGate: string;
   partySize: number;
   attendeeAges: string[];

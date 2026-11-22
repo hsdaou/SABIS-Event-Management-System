@@ -52,7 +52,7 @@ export const PassInspectorModal: React.FC<PassInspectorModalProps> = ({ registra
                     : 'bg-[#DFF0D8] text-[#016836] border-[#016836]/25'
                 }`}
               >
-                {isVip ? '⭐ VIP' : 'Regular Parent'}
+                {isVip ? 'VIP' : 'Parent'}
               </span>
               <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#E6F4FA] text-[#0080BB] border border-[#0080BB]/25">
                 {registration.passes.length} SABIS® QR {registration.passes.length === 1 ? 'Pass' : 'Passes'}

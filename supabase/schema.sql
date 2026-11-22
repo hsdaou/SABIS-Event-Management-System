@@ -80,7 +80,7 @@ create table if not exists public.registrations (
   school_type text not null default '',
   school_branch text not null default '',
   school_other text not null default '',
-  category text not null default 'Regular Parent',
+  category text not null default 'Parent',
   assigned_gate text not null,
   party_size int not null default 1 check (party_size >= 1 and party_size <= 20),
   attendee_ages jsonb not null default '[]'::jsonb,

@@ -23,7 +23,7 @@ export const InvitationPage: React.FC = () => {
 
   const eventParam = searchParams.get('event');
   const venueParam = searchParams.get('venue') || '';
-  const tierParam = (searchParams.get('tier') || 'regular').toLowerCase();
+  const tierParam = (searchParams.get('tier') || 'parent').toLowerCase();
   const isVip = tierParam === 'vip';
 
   const targetEvent = useMemo(
@@ -173,14 +173,14 @@ export const InvitationPage: React.FC = () => {
         schoolType: toggles.school ? schoolType : '',
         schoolBranch: toggles.school ? schoolBranch : '',
         schoolOther: toggles.school ? schoolOther : '',
-        category: isVip ? 'VIP' : 'Regular Parent',
+        category: isVip ? 'VIP' : 'Parent',
         assignedGate: activeVenue?.name || 'Gate A - Main Campus Entrance',
         partySize: effectivePartySize,
         attendeeAges: toggles.attendeeAges ? attendeeAges.slice(0, effectivePartySize) : [],
         otherAttendees: toggles.otherAttendeeContacts
           ? otherAttendees.slice(0, Math.max(0, effectivePartySize - 1))
           : [],
-        notes: `Registered via ${activeVenue?.name || 'Venue'} (${isVip ? 'VIP' : 'Regular'}) invitation link`,
+        notes: `Registered via ${activeVenue?.name || 'Venue'} (${isVip ? 'VIP' : 'Parent'}) invitation link`,
         fromInvitationPage: true,
       });
 
@@ -245,7 +245,7 @@ export const InvitationPage: React.FC = () => {
                   : 'bg-[#DFF0D8] text-[#016836] border-[#016836]/25'
               }`}
             >
-              {isVip ? '⭐ VIP Invitation Pass' : 'Regular Parent Pass'}
+              {isVip ? 'VIP' : 'Parent'}
             </span>
           </div>
           <p className="text-xs sm:text-sm text-[#7B6E65]">
