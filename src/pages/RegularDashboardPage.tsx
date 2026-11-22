@@ -30,7 +30,7 @@ export const RegularDashboardPage: React.FC = () => {
             <span className="text-[11px] font-bold uppercase tracking-wider text-[#016836]">
               {activeEvent.name}
             </span>
-            <h2 className="text-lg sm:text-xl font-bold text-[#26211E]">Event Dashboard</h2>
+            <h2 className="text-lg sm:text-xl font-bold text-[#26211E]">School Dashboard</h2>
             <p className="text-xs text-[#7B6E65]">
               Click any summary card below to inspect live details, register walk-ins at the desk, or track live attendance
             </p>

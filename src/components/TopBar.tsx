@@ -34,7 +34,7 @@ export const TopBar: React.FC = () => {
     session.role === 'control'
       ? 'Control Admin'
       : session.role === 'regular'
-      ? 'Regular Dashboard'
+      ? 'School Dashboard'
       : 'Gate Control';
 
   const handleSignOut = async () => {
@@ -121,7 +121,7 @@ export const TopBar: React.FC = () => {
               }`}
             >
               <LayoutDashboard className="w-3.5 h-3.5" />
-              <span>Regular Dashboard</span>
+              <span>School Dashboard</span>
             </button>
             <button
               type="button"

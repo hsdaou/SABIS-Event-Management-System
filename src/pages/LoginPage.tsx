@@ -210,7 +210,7 @@ export const LoginPage: React.FC = () => {
                   <div className="flex items-center gap-2.5">
                     <Users className="w-4 h-4 text-[#0080BB] shrink-0" />
                     <div>
-                      <p className="text-xs font-bold text-[#26211E]">Tier 1 — Regular Dashboard User</p>
+                      <p className="text-xs font-bold text-[#26211E]">Tier 1 — School Dashboard User</p>
                       <p className="text-[11px] font-mono text-[#0080BB]">staff@sabis-events.edu</p>
                     </div>
                   </div>

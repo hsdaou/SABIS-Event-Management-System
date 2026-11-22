@@ -981,7 +981,7 @@ export const ControlDashboardPage: React.FC = () => {
                     Event Name &amp; Venue Settings (With Maximum Capacity)
                   </h3>
                   <p className="text-xs text-[#7B6E65]">
-                    Venue settings and max capacity are managed strictly here and never displayed on the Regular Dashboard.
+                    Venue settings and max capacity are managed strictly here and never displayed on the School Dashboard.
                   </p>
                 </div>
                 <button
@@ -1251,7 +1251,7 @@ export const ControlDashboardPage: React.FC = () => {
                   <span>Add Authorized User via Email</span>
                 </h3>
                 <p className="text-xs text-[#7B6E65] mt-0.5">
-                  Register users into Tier 1 (Regular Dashboard) or Tier 2 (Gate Control Mobile Scanner)
+                  Register users into Tier 1 (School Dashboard) or Tier 2 (Gate Control Mobile Scanner)
                 </p>
               </div>
 
@@ -1305,10 +1305,10 @@ export const ControlDashboardPage: React.FC = () => {
                     >
                       <div className="flex items-center gap-2 text-xs font-bold text-[#26211E]">
                         <Users className="w-4 h-4 text-[#0080BB]" />
-                        <span>Tier 1: Regular Dashboard User</span>
+                        <span>Tier 1: School Dashboard User</span>
                       </div>
                       <p className="text-[11px] text-[#7B6E65] mt-1">
-                        View-only dashboard + Staff Desk Manual Registration &amp; Pass Lookup + Event Logs
+                        View-only school dashboard + Staff Desk Manual Registration &amp; Pass Lookup + Event Logs
                       </p>
                     </button>
 
@@ -1364,7 +1364,7 @@ export const ControlDashboardPage: React.FC = () => {
                 <div>
                   <h3 className="text-base font-bold text-[#26211E]">Authorized Email Directory</h3>
                   <p className="text-xs text-[#7B6E65] mt-0.5">
-                    {tierCounts.regular} Regular Dashboard • {tierCounts.gate} Gate Control •{' '}
+                    {tierCounts.regular} School Dashboard • {tierCounts.gate} Gate Control •{' '}
                     {tierCounts.control} Control Admin
                   </p>
                 </div>
@@ -1401,7 +1401,7 @@ export const ControlDashboardPage: React.FC = () => {
                             {u.role === 'control'
                               ? 'Control Admin'
                               : u.role === 'regular'
-                              ? 'Tier 1: Regular Dashboard'
+                              ? 'Tier 1: School Dashboard'
                               : 'Tier 2: Gate Control'}
                           </span>
                           {!u.active && (
@@ -1422,7 +1422,7 @@ export const ControlDashboardPage: React.FC = () => {
                           }
                           className="px-2.5 py-1.5 rounded-lg bg-white border border-[#B6ADA4] text-xs text-[#26211E] disabled:opacity-50"
                         >
-                          <option value="regular">Tier 1: Regular</option>
+                          <option value="regular">Tier 1: School Dashboard</option>
                           <option value="gate">Tier 2: Gate Control</option>
                           <option value="control">Control Admin</option>
                         </select>
