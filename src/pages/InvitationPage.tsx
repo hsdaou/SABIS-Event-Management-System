@@ -188,9 +188,13 @@ export const InvitationPage: React.FC = () => {
       setDispatchInfo(dispatchMessage || '');
       showToast(
         registration.deliveryMode === 'contact_info'
-          ? `${registration.passes.length} SABIS® QR pass(es) sent to your registered contact information!`
+          ? registration.deliveryStatus === 'sent'
+            ? `${registration.passes.length} SABIS® QR pass(es) emailed to ${registration.email}!`
+            : dispatchMessage || 'Registration saved, but email could not be delivered yet.'
           : `Registration confirmed! Generated ${registration.passes.length} SABIS® QR pass(es).`,
-        'success'
+        registration.deliveryMode === 'contact_info' && registration.deliveryStatus !== 'sent'
+          ? 'warning'
+          : 'success'
       );
     } finally {
       setSubmitting(false);
@@ -523,14 +527,33 @@ export const InvitationPage: React.FC = () => {
               <MailCheck className="w-8 h-8 text-[#016836]" />
             </div>
             <div className="space-y-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#DFF0D8] text-[#016836] border border-[#016836]/25">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Registration Confirmed
+              <span
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
+                  completedReg.deliveryStatus === 'sent'
+                    ? 'bg-[#DFF0D8] text-[#016836] border-[#016836]/25'
+                    : 'bg-[#FCF8E3] text-[#8A6D3B] border-[#8A6D3B]/35'
+                }`}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                {completedReg.deliveryStatus === 'sent'
+                  ? 'Registration Confirmed & Emailed'
+                  : 'Registration Saved — Email Queued'}
               </span>
               <h2 className="text-xl font-bold text-[#26211E]">
-                {completedReg.passes.length} SABIS® Entry QR {completedReg.passes.length === 1 ? 'Pass' : 'Passes'} Sent!
+                {completedReg.deliveryStatus === 'sent'
+                  ? `${completedReg.passes.length} SABIS® Entry QR ${
+                      completedReg.passes.length === 1 ? 'Pass' : 'Passes'
+                    } Sent!`
+                  : `Registration Confirmed (${completedReg.passes.length} QR ${
+                      completedReg.passes.length === 1 ? 'Pass' : 'Passes'
+                    } Issued)`}
               </h2>
               <p className="text-xs sm:text-sm text-[#7B6E65] max-w-md mx-auto">
-                Your unique QR entry {completedReg.passes.length === 1 ? 'pass has' : 'passes have'} been dispatched to your registered contact information:
+                {completedReg.deliveryStatus === 'sent'
+                  ? `Your unique QR entry ${
+                      completedReg.passes.length === 1 ? 'pass has' : 'passes have'
+                    } been delivered to your registered email address:`
+                  : 'Your registration is recorded. See delivery status below:'}
               </p>
             </div>
 

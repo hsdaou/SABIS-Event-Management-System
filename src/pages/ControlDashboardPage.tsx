@@ -129,6 +129,55 @@ export const ControlDashboardPage: React.FC = () => {
   const [newUserRole, setNewUserRole] = useState<UserRole>('regular');
   const [userError, setUserError] = useState('');
 
+  // Email delivery health status
+  const [emailStatus, setEmailStatus] = useState<{
+    checked: boolean;
+    configured: boolean;
+    provider: string;
+    senderEmail: string;
+  }>({ checked: false, configured: false, provider: 'none', senderEmail: 'hsdaou@gmail.com' });
+  const [sendingTestEmail, setSendingTestEmail] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/send-qr')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data && typeof data.configured === 'boolean') {
+          setEmailStatus({
+            checked: true,
+            configured: data.configured,
+            provider: data.provider || 'none',
+            senderEmail: data.senderEmail || 'hsdaou@gmail.com',
+          });
+        }
+      })
+      .catch(() => {
+        setEmailStatus((prev) => ({ ...prev, checked: true }));
+      });
+  }, []);
+
+  const handleSendTestEmail = async () => {
+    const to = session?.email || emailStatus.senderEmail || 'hsdaou@gmail.com';
+    setSendingTestEmail(true);
+    try {
+      const res = await fetch('/api/send-qr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ testOnly: true, recipientEmail: to }),
+      });
+      const data = (await res.json()) as { ok?: boolean; emailSent?: boolean; message?: string; error?: string };
+      if (data.emailSent) {
+        showToast(data.message || `Test email sent to ${to}!`, 'success');
+      } else {
+        showToast(data.error || 'Could not send test email.', 'error');
+      }
+    } catch {
+      showToast('Email API is available once deployed on Vercel.', 'warning');
+    } finally {
+      setSendingTestEmail(false);
+    }
+  };
+
   useEffect(() => {
     setEventTitleDraft(activeEvent.name);
     setEventDateDraft(activeEvent.eventDate);
@@ -833,23 +882,55 @@ export const ControlDashboardPage: React.FC = () => {
                 </div>
 
                 {settings.qrDeliveryMode === 'contact_info' && (
-                  <div className="p-3.5 rounded-xl bg-[#F7F4F2] border border-[#E3DBD3] space-y-2">
-                    <label className="block text-xs font-bold text-[#26211E]">
-                      Delivery Channel Preference
-                    </label>
-                    <select
-                      value={settings.contactDeliveryChannel}
-                      onChange={(e) =>
-                        updateSettings({
-                          contactDeliveryChannel: e.target.value as 'email' | 'phone' | 'both',
-                        })
-                      }
-                      className="w-full px-3 py-2 rounded-lg bg-white border border-[#B6ADA4] text-xs text-[#26211E]"
-                    >
-                      <option value="both">Email &amp; Phone (Registered Contact Info)</option>
-                      <option value="email">Registered Email Only</option>
-                      <option value="phone">Registered Phone Only</option>
-                    </select>
+                  <div className="p-3.5 rounded-xl bg-[#F7F4F2] border border-[#E3DBD3] space-y-3">
+                    <div>
+                      <label className="block text-xs font-bold text-[#26211E] mb-1">
+                        Delivery Channel Preference
+                      </label>
+                      <select
+                        value={settings.contactDeliveryChannel}
+                        onChange={(e) =>
+                          updateSettings({
+                            contactDeliveryChannel: e.target.value as 'email' | 'phone' | 'both',
+                          })
+                        }
+                        className="w-full px-3 py-2 rounded-lg bg-white border border-[#B6ADA4] text-xs text-[#26211E]"
+                      >
+                        <option value="email">Registered Email (Automated via Gmail SMTP)</option>
+                        <option value="both">Email &amp; Phone (Registered Contact Info)</option>
+                        <option value="phone">Registered Phone Only</option>
+                      </select>
+                    </div>
+
+                    {emailStatus.checked && (
+                      <div
+                        className={`p-3 rounded-lg border text-xs space-y-2 ${
+                          emailStatus.configured
+                            ? 'bg-[#DFF0D8] border-[#016836]/30 text-[#016836]'
+                            : 'bg-[#FCF8E3] border-[#8A6D3B]/35 text-[#8A6D3B]'
+                        }`}
+                      >
+                        <p className="font-bold">
+                          {emailStatus.configured
+                            ? `✓ Live Email Delivery Active (${emailStatus.senderEmail})`
+                            : '⚠️ Email Sender Not Yet Connected'}
+                        </p>
+                        {!emailStatus.configured && (
+                          <p className="text-[11px] leading-relaxed">
+                            Add <code className="font-mono font-bold">GMAIL_USER=hsdaou@gmail.com</code> and{' '}
+                            <code className="font-mono font-bold">GMAIL_APP_PASSWORD</code> in Vercel Settings &rarr; Environment Variables, then Redeploy.
+                          </p>
+                        )}
+                        <button
+                          type="button"
+                          disabled={sendingTestEmail}
+                          onClick={handleSendTestEmail}
+                          className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-[#016836] hover:bg-[#01522B] text-white transition disabled:opacity-50"
+                        >
+                          {sendingTestEmail ? 'Sending Test...' : 'Send Test Email Now'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

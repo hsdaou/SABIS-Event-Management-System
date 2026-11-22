@@ -993,24 +993,36 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           }),
         });
 
-        if (res.ok) {
-          const data = (await res.json()) as { ok: boolean; message?: string };
+        const data = (await res.json()) as {
+          ok?: boolean;
+          emailSent?: boolean;
+          message?: string;
+          error?: string;
+        };
+
+        if (res.ok && data.emailSent) {
           return {
             ok: true,
             message:
               data.message ||
-              `Dispatched ${registration.passes.length} SABIS® QR pass(es) to registered contact info.`,
+              `Delivered ${registration.passes.length} SABIS® QR pass(es) to ${registration.email}.`,
           };
         }
-      } catch {
-        // Local dev without Vercel API
-      }
 
-      const target = [registration.email, registration.phone].filter(Boolean).join(' / ') || 'registered contact';
-      return {
-        ok: true,
-        message: `${registration.passes.length} SABIS® QR pass(es) queued for delivery to ${target}.`,
-      };
+        return {
+          ok: false,
+          message:
+            data.error ||
+            data.message ||
+            'Could not send email. Verify GMAIL_USER and GMAIL_APP_PASSWORD in Vercel Environment Variables.',
+        };
+      } catch {
+        return {
+          ok: false,
+          message:
+            'Email API unavailable in local preview mode. Deploy on Vercel with GMAIL_USER and GMAIL_APP_PASSWORD configured.',
+        };
+      }
     },
     [activeEvent, events]
   );
