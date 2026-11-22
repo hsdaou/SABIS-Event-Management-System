@@ -51,7 +51,8 @@ export const InvitationPage: React.FC = () => {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [numAttendees, setNumAttendees] = useState(1);
+  // String-backed numeric input so mobile & desktop users can freely delete/clear and type any number
+  const [numAttendeesInput, setNumAttendeesInput] = useState('1');
   const [schoolType, setSchoolType] = useState<'sabis_isc' | 'other' | ''>('');
   const [schoolBranch, setSchoolBranch] = useState('');
   const [schoolOther, setSchoolOther] = useState('');
@@ -62,20 +63,48 @@ export const InvitationPage: React.FC = () => {
   const [completedReg, setCompletedReg] = useState<Registration | null>(null);
   const [dispatchInfo, setDispatchInfo] = useState<string>('');
 
-  const effectivePartySize = toggles.numAttendees ? Math.max(1, Math.min(20, numAttendees || 1)) : 1;
+  const parsedAttendees = parseInt(numAttendeesInput, 10);
+  const effectivePartySize = toggles.numAttendees
+    ? Number.isFinite(parsedAttendees) && parsedAttendees >= 1
+      ? Math.min(20, parsedAttendees)
+      : 1
+    : 1;
 
-  const handleAttendeesChange = (val: number) => {
-    const clamped = Math.max(1, Math.min(20, val || 1));
-    setNumAttendees(clamped);
-    setAttendeeAges((prev) => Array.from({ length: clamped }, (_, i) => prev[i] || ''));
+  const handleAttendeesInputChange = (raw: string) => {
+    // Allow clearing the input completely and typing digits cleanly on phones & desktop
+    const digitsOnly = raw.replace(/\D/g, '').slice(0, 2);
+    if (digitsOnly === '') {
+      setNumAttendeesInput('');
+      return;
+    }
+    const parsed = parseInt(digitsOnly, 10);
+    if (parsed > 20) {
+      setNumAttendeesInput('20');
+      setAttendeeAges((prev) => Array.from({ length: 20 }, (_, i) => prev[i] || ''));
+      setOtherAttendees((prev) =>
+        Array.from({ length: 19 }, (_, i) => prev[i] || { name: '', contact: '' })
+      );
+      return;
+    }
+    setNumAttendeesInput(digitsOnly);
+    const countForFields = Math.max(1, parsed);
+    setAttendeeAges((prev) => Array.from({ length: countForFields }, (_, i) => prev[i] || ''));
     setOtherAttendees((prev) =>
-      Array.from({ length: Math.max(0, clamped - 1) }, (_, i) => prev[i] || { name: '', contact: '' })
+      Array.from({ length: Math.max(0, countForFields - 1) }, (_, i) => prev[i] || { name: '', contact: '' })
     );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (toggles.parentNumber && requiredFields.parentNumber && !parentNumber.trim()) {
+      showToast('Parent Number is required.', 'warning');
+      return;
+    }
+    if (toggles.fullName && requiredFields.fullName && !fullName.trim()) {
+      showToast('Full Name is required.', 'warning');
+      return;
+    }
     if (toggles.phone && requiredFields.phone && !phone.trim()) {
       showToast('Phone number is required by the event organizer.', 'warning');
       return;
@@ -84,13 +113,45 @@ export const InvitationPage: React.FC = () => {
       showToast('Email address is required by the event organizer.', 'warning');
       return;
     }
-    if (toggles.school && !schoolType) {
-      showToast('Please indicate which school your kids are attending.', 'warning');
+    if (
+      toggles.numAttendees &&
+      requiredFields.numAttendees &&
+      (!numAttendeesInput.trim() || !Number.isFinite(parsedAttendees) || parsedAttendees < 1)
+    ) {
+      showToast('Please enter the Number of Attendees (1 to 20).', 'warning');
       return;
     }
-    if (toggles.school && schoolType === 'sabis_isc' && !schoolBranch) {
-      showToast('Please select your SABIS® / ISC school branch from the dropdown.', 'warning');
-      return;
+    if (toggles.school && requiredFields.school) {
+      if (!schoolType) {
+        showToast('Please indicate which school your kids are attending.', 'warning');
+        return;
+      }
+      if (schoolType === 'sabis_isc' && !schoolBranch) {
+        showToast('Please select your SABIS® / ISC school branch from the dropdown.', 'warning');
+        return;
+      }
+      if (schoolType === 'other' && !schoolOther.trim()) {
+        showToast('Please enter your school name.', 'warning');
+        return;
+      }
+    }
+    if (toggles.attendeeAges && requiredFields.attendeeAges) {
+      const missingAge = Array.from({ length: effectivePartySize }).some(
+        (_, idx) => !(attendeeAges[idx] || '').trim()
+      );
+      if (missingAge) {
+        showToast('Please enter the age for each attendee.', 'warning');
+        return;
+      }
+    }
+    if (toggles.otherAttendeeContacts && requiredFields.otherAttendeeContacts && effectivePartySize > 1) {
+      const missingOther = otherAttendees
+        .slice(0, effectivePartySize - 1)
+        .some((o) => !o.name.trim() || !o.contact.trim());
+      if (missingOther) {
+        showToast('Please enter name and contact details for each accompanying attendee.', 'warning');
+        return;
+      }
     }
     if (
       targetEvent.qrDeliveryMode === 'contact_info' &&
@@ -143,7 +204,7 @@ export const InvitationPage: React.FC = () => {
     setFullName('');
     setEmail('');
     setPhone('');
-    setNumAttendees(1);
+    setNumAttendeesInput('1');
     setSchoolType('');
     setSchoolBranch('');
     setSchoolOther('');
@@ -205,12 +266,17 @@ export const InvitationPage: React.FC = () => {
               <form onSubmit={handleSubmit} className="space-y-4">
                 {toggles.parentNumber && (
                   <div>
-                    <label className="block text-xs font-bold text-[#26211E] mb-1.5">
-                      Parent Number <span className="text-[#E53C2E]">*</span>
+                    <label className="flex items-center justify-between text-xs font-bold text-[#26211E] mb-1.5">
+                      <span>Parent Number</span>
+                      {requiredFields.parentNumber ? (
+                        <span className="text-[11px] font-bold text-[#E53C2E]">* Required</span>
+                      ) : (
+                        <span className="text-[11px] font-normal text-[#7B6E65]">Optional</span>
+                      )}
                     </label>
                     <input
                       type="text"
-                      required
+                      required={requiredFields.parentNumber}
                       value={parentNumber}
                       onChange={(e) => setParentNumber(e.target.value)}
                       placeholder="e.g., PAR-10421"
@@ -221,12 +287,17 @@ export const InvitationPage: React.FC = () => {
 
                 {toggles.fullName && (
                   <div>
-                    <label className="block text-xs font-bold text-[#26211E] mb-1.5">
-                      Full Name <span className="text-[#E53C2E]">*</span>
+                    <label className="flex items-center justify-between text-xs font-bold text-[#26211E] mb-1.5">
+                      <span>Full Name</span>
+                      {requiredFields.fullName ? (
+                        <span className="text-[11px] font-bold text-[#E53C2E]">* Required</span>
+                      ) : (
+                        <span className="text-[11px] font-normal text-[#7B6E65]">Optional</span>
+                      )}
                     </label>
                     <input
                       type="text"
-                      required
+                      required={requiredFields.fullName}
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       placeholder="e.g., Nadia Khoury"
@@ -235,7 +306,7 @@ export const InvitationPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* Separate Phone Number Field — Required/Optional controlled by Control Dashboard */}
+                {/* Separate Phone Number Field */}
                 {toggles.phone && (
                   <div>
                     <label className="flex items-center justify-between text-xs font-bold text-[#26211E] mb-1.5">
@@ -260,7 +331,7 @@ export const InvitationPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* Separate Email Field — Required/Optional controlled by Control Dashboard */}
+                {/* Separate Email Field */}
                 {toggles.email && (
                   <div>
                     <label className="flex items-center justify-between text-xs font-bold text-[#26211E] mb-1.5">
@@ -293,23 +364,31 @@ export const InvitationPage: React.FC = () => {
                     onChangeType={setSchoolType}
                     onChangeBranch={setSchoolBranch}
                     onChangeOther={setSchoolOther}
-                    required
+                    required={requiredFields.school}
                   />
                 )}
 
+                {/* Mobile-friendly plain numeric typing for Number of Attendees */}
                 {toggles.numAttendees && (
                   <div>
-                    <label className="block text-xs font-bold text-[#26211E] mb-1.5">
-                      Number of Attendees <span className="text-[#E53C2E]">*</span>
+                    <label className="flex items-center justify-between text-xs font-bold text-[#26211E] mb-1.5">
+                      <span>Number of Attendees</span>
+                      {requiredFields.numAttendees ? (
+                        <span className="text-[11px] font-bold text-[#E53C2E]">* Required</span>
+                      ) : (
+                        <span className="text-[11px] font-normal text-[#7B6E65]">Optional</span>
+                      )}
                     </label>
                     <input
-                      type="number"
-                      min={1}
-                      max={20}
-                      required
-                      value={numAttendees}
-                      onChange={(e) => handleAttendeesChange(parseInt(e.target.value, 10))}
-                      className="w-full px-4 py-2.5 rounded-xl bg-white border border-[#B6ADA4] text-sm text-[#26211E] focus:outline-none focus:border-[#016836]"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      autoComplete="off"
+                      required={requiredFields.numAttendees}
+                      value={numAttendeesInput}
+                      onChange={(e) => handleAttendeesInputChange(e.target.value)}
+                      placeholder="Type number of attendees (1–20)"
+                      className="w-full px-4 py-2.5 rounded-xl bg-white border border-[#B6ADA4] text-sm text-[#26211E] placeholder-[#7B6E65]/70 focus:outline-none focus:border-[#016836]"
                     />
                     <p className="text-[11px] text-[#016836] font-medium mt-1">
                       {effectivePartySize} individual SABIS® QR {effectivePartySize === 1 ? 'code' : 'codes'} will be{' '}
@@ -320,8 +399,13 @@ export const InvitationPage: React.FC = () => {
 
                 {toggles.attendeeAges && (
                   <div className="p-3.5 rounded-xl bg-[#F7F4F2] border border-[#E3DBD3] space-y-2">
-                    <label className="block text-xs font-bold text-[#26211E]">
-                      Age of Attendees ({effectivePartySize})
+                    <label className="flex items-center justify-between text-xs font-bold text-[#26211E]">
+                      <span>Age of Attendees ({effectivePartySize})</span>
+                      {requiredFields.attendeeAges ? (
+                        <span className="text-[11px] font-bold text-[#E53C2E]">* Required</span>
+                      ) : (
+                        <span className="text-[11px] font-normal text-[#7B6E65]">Optional</span>
+                      )}
                     </label>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                       {Array.from({ length: effectivePartySize }).map((_, idx) => (
@@ -330,14 +414,14 @@ export const InvitationPage: React.FC = () => {
                             Attendee {idx + 1} Age
                           </label>
                           <input
-                            type="number"
-                            min={1}
-                            max={110}
-                            required
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            required={requiredFields.attendeeAges}
                             value={attendeeAges[idx] || ''}
                             onChange={(e) => {
                               const next = [...attendeeAges];
-                              next[idx] = e.target.value;
+                              next[idx] = e.target.value.replace(/\D/g, '').slice(0, 3);
                               setAttendeeAges(next);
                             }}
                             placeholder="Age"
@@ -352,8 +436,13 @@ export const InvitationPage: React.FC = () => {
                 {toggles.otherAttendeeContacts && effectivePartySize > 1 && (
                   <div className="p-3.5 rounded-xl bg-[#F7F4F2] border border-[#E3DBD3] space-y-3">
                     <div>
-                      <label className="block text-xs font-bold text-[#26211E]">
-                        Contact Details of the Other Attendee{effectivePartySize > 2 ? 's' : ''}
+                      <label className="flex items-center justify-between text-xs font-bold text-[#26211E]">
+                        <span>Contact Details of the Other Attendee{effectivePartySize > 2 ? 's' : ''}</span>
+                        {requiredFields.otherAttendeeContacts ? (
+                          <span className="text-[11px] font-bold text-[#E53C2E]">* Required</span>
+                        ) : (
+                          <span className="text-[11px] font-normal text-[#7B6E65]">Optional</span>
+                        )}
                       </label>
                       <p className="text-[11px] text-[#7B6E65] mt-0.5">
                         Enter the name and phone/email for each accompanying attendee
@@ -370,7 +459,7 @@ export const InvitationPage: React.FC = () => {
                           </label>
                           <input
                             type="text"
-                            required
+                            required={requiredFields.otherAttendeeContacts}
                             value={other.name}
                             onChange={(e) => {
                               const next = [...otherAttendees];
@@ -387,7 +476,7 @@ export const InvitationPage: React.FC = () => {
                           </label>
                           <input
                             type="text"
-                            required
+                            required={requiredFields.otherAttendeeContacts}
                             value={other.contact}
                             onChange={(e) => {
                               const next = [...otherAttendees];

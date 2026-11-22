@@ -17,7 +17,7 @@ export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ on
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [partySize, setPartySize] = useState(1);
+  const [partySizeInput, setPartySizeInput] = useState('1');
   const [assignedGate, setAssignedGate] = useState(venues[0]?.name || 'Gate A - Main Campus Entrance');
   const [category, setCategory] = useState<'Regular Parent' | 'VIP'>('Regular Parent');
   const [schoolType, setSchoolType] = useState<'sabis_isc' | 'other' | ''>('');
@@ -38,9 +38,18 @@ export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ on
     }
   }, [assignedGate, venues]);
 
-  const handlePartySizeChange = (val: number) => {
-    const clamped = Math.max(1, Math.min(20, val || 1));
-    setPartySize(clamped);
+  const parsedPartySize = parseInt(partySizeInput, 10);
+  const partySize = Number.isFinite(parsedPartySize) && parsedPartySize >= 1 ? Math.min(20, parsedPartySize) : 1;
+
+  const handlePartySizeInputChange = (raw: string) => {
+    const digitsOnly = raw.replace(/\D/g, '').slice(0, 2);
+    if (digitsOnly === '') {
+      setPartySizeInput('');
+      return;
+    }
+    const parsed = parseInt(digitsOnly, 10);
+    const clamped = Math.min(20, Math.max(1, parsed || 1));
+    setPartySizeInput(parsed > 20 ? '20' : digitsOnly);
     setAttendeeAges((prev) => Array.from({ length: clamped }, (_, i) => prev[i] || ''));
     setOtherAttendees((prev) =>
       Array.from({ length: Math.max(0, clamped - 1) }, (_, i) => prev[i] || { name: '', contact: '' })
@@ -78,7 +87,7 @@ export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ on
       setName('');
       setPhone('');
       setEmail('');
-      setPartySize(1);
+      setPartySizeInput('1');
       setSchoolType('');
       setSchoolBranch('');
       setSchoolOther('');
@@ -191,12 +200,14 @@ export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ on
                 Number of Attendees <span className="text-[#E53C2E]">*</span>
               </label>
               <input
-                type="number"
-                min={1}
-                max={20}
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                autoComplete="off"
                 required
-                value={partySize}
-                onChange={(e) => handlePartySizeChange(parseInt(e.target.value, 10))}
+                value={partySizeInput}
+                onChange={(e) => handlePartySizeInputChange(e.target.value)}
+                placeholder="1–20"
                 className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#016836]/40 text-sm text-[#26211E] focus:outline-none focus:border-[#016836]"
               />
             </div>
@@ -252,14 +263,14 @@ export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ on
                   {Array.from({ length: partySize }).map((_, idx) => (
                     <input
                       key={idx}
-                      type="number"
-                      min={1}
-                      max={110}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       placeholder={`Attendee ${idx + 1} age`}
                       value={attendeeAges[idx] || ''}
                       onChange={(e) => {
                         const copy = [...attendeeAges];
-                        copy[idx] = e.target.value;
+                        copy[idx] = e.target.value.replace(/\D/g, '').slice(0, 3);
                         setAttendeeAges(copy);
                       }}
                       className="px-2.5 py-1.5 rounded-lg bg-white border border-[#B6ADA4] text-xs text-[#26211E]"

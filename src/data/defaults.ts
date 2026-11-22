@@ -12,8 +12,14 @@ export const DEFAULT_FIELD_TOGGLES: FieldToggles = {
 };
 
 export const DEFAULT_REQUIRED_FIELDS: RequiredFields = {
+  parentNumber: true,
+  fullName: true,
   phone: true,
   email: true,
+  numAttendees: true,
+  school: true,
+  attendeeAges: false,
+  otherAttendeeContacts: false,
 };
 
 export const DEFAULT_EVENT_ID = 'evt-default';

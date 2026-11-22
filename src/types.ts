@@ -17,8 +17,14 @@ export interface FieldToggles {
 }
 
 export interface RequiredFields {
+  parentNumber: boolean;
+  fullName: boolean;
   phone: boolean;
   email: boolean;
+  numAttendees: boolean;
+  school: boolean;
+  attendeeAges: boolean;
+  otherAttendeeContacts: boolean;
 }
 
 export interface EventItem {

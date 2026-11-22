@@ -23,8 +23,13 @@ export const SchoolSelectorField: React.FC<SchoolSelectorFieldProps> = ({
   return (
     <div className="space-y-3 p-4 rounded-xl bg-[#F7F4F2] border border-[#E3DBD3]">
       <div>
-        <label className="block text-xs font-bold text-[#26211E] mb-2">
-          Which school are your kids attending? {required && <span className="text-[#E53C2E]">*</span>}
+        <label className="flex items-center justify-between text-xs font-bold text-[#26211E] mb-2">
+          <span>Which school are your kids attending?</span>
+          {required ? (
+            <span className="text-[11px] font-bold text-[#E53C2E]">* Required</span>
+          ) : (
+            <span className="text-[11px] font-normal text-[#7B6E65]">Optional</span>
+          )}
         </label>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <button

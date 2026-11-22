@@ -437,7 +437,7 @@ export const ControlDashboardPage: React.FC = () => {
                     onClick={() => {
                       updateSettings({
                         fieldToggles: { ...settings.fieldToggles, phone: true, email: true },
-                        requiredFields: { phone: true, email: false },
+                        requiredFields: { ...settings.requiredFields, phone: true, email: false },
                       });
                       showToast('Phone Number set to Required; Email set to Optional', 'success');
                     }}
@@ -454,7 +454,7 @@ export const ControlDashboardPage: React.FC = () => {
                     onClick={() => {
                       updateSettings({
                         fieldToggles: { ...settings.fieldToggles, phone: true, email: true },
-                        requiredFields: { phone: false, email: true },
+                        requiredFields: { ...settings.requiredFields, phone: false, email: true },
                       });
                       showToast('Email set to Required; Phone Number set to Optional', 'success');
                     }}
@@ -471,7 +471,7 @@ export const ControlDashboardPage: React.FC = () => {
                     onClick={() => {
                       updateSettings({
                         fieldToggles: { ...settings.fieldToggles, phone: true, email: true },
-                        requiredFields: { phone: true, email: true },
+                        requiredFields: { ...settings.requiredFields, phone: true, email: true },
                       });
                       showToast('Both Phone Number and Email set to Required', 'success');
                     }}
@@ -486,7 +486,9 @@ export const ControlDashboardPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      updateSettings({ requiredFields: { phone: false, email: false } });
+                      updateSettings({
+                        requiredFields: { ...settings.requiredFields, phone: false, email: false },
+                      });
                       showToast('Both Phone Number and Email set to Optional', 'info');
                     }}
                     className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition ${
@@ -614,14 +616,14 @@ export const ControlDashboardPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Other Invitation Page Field Toggles */}
+              {/* Other Invitation Page Field Toggles (Show/Hide + Required/Optional) */}
               <div className="glass-panel rounded-2xl p-5 sm:p-6 space-y-4">
                 <div className="border-b border-[#E3DBD3] pb-3">
                   <h3 className="text-base font-bold text-[#26211E]">
-                    Other Invitation Page Field Visibility Toggles
+                    All Invitation Page Field Controls (Visibility &amp; Required)
                   </h3>
                   <p className="text-xs text-[#7B6E65] mt-0.5">
-                    Switch any additional field ON or OFF for <strong>{activeEvent.name}</strong>
+                    Toggle any field ON/OFF and choose whether it is Required or Optional for <strong>{activeEvent.name}</strong>
                   </p>
                 </div>
 
@@ -631,36 +633,61 @@ export const ControlDashboardPage: React.FC = () => {
                   </h4>
                   {currentFields.map((item) => {
                     const enabled = settings.fieldToggles[item.key];
+                    const isRequired = settings.requiredFields[item.key];
                     return (
                       <div
                         key={item.key}
-                        className="p-3.5 rounded-xl bg-[#F7F4F2] border border-[#E3DBD3] flex items-center justify-between gap-4"
+                        className="p-3.5 rounded-xl bg-[#F7F4F2] border border-[#E3DBD3] flex flex-wrap items-center justify-between gap-3"
                       >
-                        <div>
+                        <div className="min-w-0 flex-1">
                           <p className="text-sm font-bold text-[#26211E]">{item.label}</p>
                           <p className="text-xs text-[#7B6E65] mt-0.5">{item.description}</p>
                         </div>
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={enabled}
-                          onClick={() => {
-                            updateFieldToggle(item.key, !enabled);
-                            showToast(
-                              `${item.label} ${!enabled ? 'enabled' : 'hidden'} on Invitation Page`,
-                              'info'
-                            );
-                          }}
-                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
-                            enabled ? 'bg-[#016836]' : 'bg-[#B6ADA4]'
-                          }`}
-                        >
-                          <span
-                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${
-                              enabled ? 'translate-x-5' : 'translate-x-0'
+                        <div className="flex items-center gap-3 shrink-0">
+                          <button
+                            type="button"
+                            disabled={!enabled}
+                            onClick={() => {
+                              const next = !isRequired;
+                              updateRequiredField(item.key, next);
+                              showToast(
+                                `${item.label} is now ${next ? 'REQUIRED' : 'OPTIONAL'}`,
+                                'info'
+                              );
+                            }}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold border transition disabled:opacity-40 ${
+                              isRequired
+                                ? 'bg-[#F2DEDE] text-[#E53C2E] border-[#E53C2E]/35'
+                                : 'bg-white text-[#7B6E65] border-[#E3DBD3]'
                             }`}
-                          />
-                        </button>
+                          >
+                            {isRequired ? 'Required *' : 'Optional'}
+                          </button>
+                          <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#7B6E65]">
+                            <span>Show</span>
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={enabled}
+                              onClick={() => {
+                                updateFieldToggle(item.key, !enabled);
+                                showToast(
+                                  `${item.label} ${!enabled ? 'enabled' : 'hidden'} on Invitation Page`,
+                                  'info'
+                                );
+                              }}
+                              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                                enabled ? 'bg-[#016836]' : 'bg-[#B6ADA4]'
+                              }`}
+                            >
+                              <span
+                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${
+                                  enabled ? 'translate-x-5' : 'translate-x-0'
+                                }`}
+                              />
+                            </button>
+                          </label>
+                        </div>
                       </div>
                     );
                   })}
@@ -672,36 +699,61 @@ export const ControlDashboardPage: React.FC = () => {
                   </h4>
                   {extraFields.map((item) => {
                     const enabled = settings.fieldToggles[item.key];
+                    const isRequired = settings.requiredFields[item.key];
                     return (
                       <div
                         key={item.key}
-                        className="p-3.5 rounded-xl bg-[#F7F4F2] border border-[#E3DBD3] flex items-center justify-between gap-4"
+                        className="p-3.5 rounded-xl bg-[#F7F4F2] border border-[#E3DBD3] flex flex-wrap items-center justify-between gap-3"
                       >
-                        <div>
+                        <div className="min-w-0 flex-1">
                           <p className="text-sm font-bold text-[#26211E]">{item.label}</p>
                           <p className="text-xs text-[#7B6E65] mt-0.5">{item.description}</p>
                         </div>
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={enabled}
-                          onClick={() => {
-                            updateFieldToggle(item.key, !enabled);
-                            showToast(
-                              `${item.label} ${!enabled ? 'enabled' : 'hidden'} on Invitation Page`,
-                              'info'
-                            );
-                          }}
-                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
-                            enabled ? 'bg-[#016836]' : 'bg-[#B6ADA4]'
-                          }`}
-                        >
-                          <span
-                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${
-                              enabled ? 'translate-x-5' : 'translate-x-0'
+                        <div className="flex items-center gap-3 shrink-0">
+                          <button
+                            type="button"
+                            disabled={!enabled}
+                            onClick={() => {
+                              const next = !isRequired;
+                              updateRequiredField(item.key, next);
+                              showToast(
+                                `${item.label} is now ${next ? 'REQUIRED' : 'OPTIONAL'}`,
+                                'info'
+                              );
+                            }}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold border transition disabled:opacity-40 ${
+                              isRequired
+                                ? 'bg-[#F2DEDE] text-[#E53C2E] border-[#E53C2E]/35'
+                                : 'bg-white text-[#7B6E65] border-[#E3DBD3]'
                             }`}
-                          />
-                        </button>
+                          >
+                            {isRequired ? 'Required *' : 'Optional'}
+                          </button>
+                          <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#7B6E65]">
+                            <span>Show</span>
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={enabled}
+                              onClick={() => {
+                                updateFieldToggle(item.key, !enabled);
+                                showToast(
+                                  `${item.label} ${!enabled ? 'enabled' : 'hidden'} on Invitation Page`,
+                                  'info'
+                                );
+                              }}
+                              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                                enabled ? 'bg-[#016836]' : 'bg-[#B6ADA4]'
+                              }`}
+                            >
+                              <span
+                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${
+                                  enabled ? 'translate-x-5' : 'translate-x-0'
+                                }`}
+                              />
+                            </button>
+                          </label>
+                        </div>
                       </div>
                     );
                   })}
