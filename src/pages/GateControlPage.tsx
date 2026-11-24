@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import jsQR from 'jsqr';
 import {
   AlertTriangle,
   Camera,
@@ -10,6 +10,7 @@ import {
   QrCode,
   RefreshCw,
   StopCircle,
+  SwitchCamera,
   XCircle,
 } from 'lucide-react';
 import { EventLogsPanel } from '../components/EventLogsPanel';
@@ -20,6 +21,57 @@ import { buildPassQrPayload, formatTimeOnly, getSchoolDisplay } from '../lib/qr'
 type MobileTab = 'scanner' | 'logs';
 type InputMode = 'camera' | 'image' | 'manual';
 
+interface BrowserBarcodeDetector {
+  detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue?: string }>>;
+}
+
+function createNativeBarcodeDetector(): BrowserBarcodeDetector | null {
+  try {
+    const Ctor = (
+      window as unknown as {
+        BarcodeDetector?: new (opts: { formats: string[] }) => BrowserBarcodeDetector;
+      }
+    ).BarcodeDetector;
+    if (Ctor) {
+      return new Ctor({ formats: ['qr_code'] });
+    }
+  } catch {
+    // fallback to jsQR
+  }
+  return null;
+}
+
+async function decodeCanvasQr(
+  canvas: HTMLCanvasElement,
+  ctx: CanvasRenderingContext2D,
+  detector: BrowserBarcodeDetector | null
+): Promise<string | null> {
+  // Engine 1: Native hardware-accelerated BarcodeDetector (when available)
+  if (detector) {
+    try {
+      const codes = await detector.detect(canvas);
+      const val = codes?.[0]?.rawValue?.trim();
+      if (val) return val;
+    } catch {
+      // fall through to jsQR
+    }
+  }
+
+  // Engine 2: Pure-JS jsQR full-frame decoder (works on 100% of iOS Safari & Android Chrome)
+  try {
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const decoded = jsQR(imageData.data, canvas.width, canvas.height, {
+      inversionAttempts: 'attemptBoth',
+    });
+    if (decoded?.data?.trim()) {
+      return decoded.data.trim();
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
 export const GateControlPage: React.FC = () => {
   const { activeEvent, venues, registrations, scanLogs, scanQrCode, refreshData, showToast } = useEvent();
 
@@ -28,12 +80,20 @@ export const GateControlPage: React.FC = () => {
   const [activeGate, setActiveGate] = useState(venues[0]?.name || 'Gate A - Main Campus Entrance');
   const [cameraRunning, setCameraRunning] = useState(false);
   const [cameraStatus, setCameraStatus] = useState('Tap "Start Camera Scanner" to scan attendee QR codes.');
+  const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
+  const [selectedCameraId, setSelectedCameraId] = useState<string>('');
   const [manualCode, setManualCode] = useState('');
   const [selectedSimPass, setSelectedSimPass] = useState('');
   const [lastResult, setLastResult] = useState<ScanResult | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [processingScan, setProcessingScan] = useState(false);
 
-  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const scanTimerRef = useRef<number | null>(null);
+  const detectorRef = useRef<BrowserBarcodeDetector | null>(null);
+  const isDecodingRef = useRef<boolean>(false);
   const lastDecodedRef = useRef<{ code: string; ts: number }>({ code: '', ts: 0 });
   const activeGateRef = useRef(activeGate);
   const scanQrCodeRef = useRef(scanQrCode);
@@ -48,40 +108,34 @@ export const GateControlPage: React.FC = () => {
     activeGateRef.current = activeGate;
   }, [activeGate]);
 
-  // Always keep ref pointing to latest scanQrCode so camera callbacks never use stale registrations!
   useEffect(() => {
     scanQrCodeRef.current = scanQrCode;
   }, [scanQrCode]);
 
-  const stopCamera = async () => {
-    if (scannerRef.current) {
-      try {
-        if (cameraRunning) {
-          await scannerRef.current.stop();
-        }
-        scannerRef.current.clear();
-      } catch {
-        // ignore cleanup error
-      }
-      scannerRef.current = null;
-      setCameraRunning(false);
-      setCameraStatus('Camera stopped.');
+  const stopCamera = useCallback(() => {
+    if (scanTimerRef.current !== null) {
+      window.clearInterval(scanTimerRef.current);
+      scanTimerRef.current = null;
     }
-  };
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    isDecodingRef.current = false;
+    setCameraRunning(false);
+    setCameraStatus('Camera stopped.');
+  }, []);
 
   useEffect(() => {
     return () => {
-      if (scannerRef.current) {
-        scannerRef.current
-          .stop()
-          .then(() => scannerRef.current?.clear())
-          .catch(() => {});
-        scannerRef.current = null;
-      }
+      stopCamera();
     };
-  }, []);
+  }, [stopCamera]);
 
-  const handleDecodedScan = async (raw: string) => {
+  const handleDecodedScan = useCallback(async (raw: string) => {
     const cleaned = String(raw || '').trim();
     if (!cleaned) return;
 
@@ -99,67 +153,113 @@ export const GateControlPage: React.FC = () => {
       }
     }
 
-    const result = await scanQrCodeRef.current(cleaned, activeGateRef.current);
-    setLastResult(result);
-  };
-
-  const startCamera = async () => {
+    setProcessingScan(true);
     try {
-      if (scannerRef.current) {
-        await stopCamera();
+      const result = await scanQrCodeRef.current(cleaned, activeGateRef.current);
+      setLastResult(result);
+    } finally {
+      setProcessingScan(false);
+    }
+  }, []);
+
+  const startCamera = useCallback(
+    async (explicitDeviceId?: string) => {
+      stopCamera();
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setCameraStatus('Camera API unavailable in this browser — switched to Manual mode.');
+        showToast('Camera unavailable; switched to Manual mode.', 'warning');
+        setInputMode('manual');
+        return;
       }
-      scannerRef.current = new Html5Qrcode('mobileQrReader', {
-        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-        useBarCodeDetectorIfSupported: true,
-        verbose: false,
-      });
-
-      setCameraStatus('Requesting rear camera permission...');
-
-      const config = {
-        fps: 15,
-        qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
-          const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-          const size = Math.max(180, Math.floor(minEdge * 0.78));
-          return { width: size, height: size };
-        },
-        disableFlip: false,
-      };
 
       try {
-        await scannerRef.current.start(
-          { facingMode: 'environment' },
-          config,
-          (decodedText) => {
-            handleDecodedScan(decodedText);
-          },
-          () => {}
-        );
-      } catch {
-        // Fallback: enumerate cameras and pick rear/first available camera
-        const cameras = await Html5Qrcode.getCameras();
-        if (!cameras || cameras.length === 0) {
-          throw new Error('No cameras available');
-        }
-        const backCam =
-          cameras.find((c) => /back|rear|environment/i.test(c.label)) ||
-          cameras[cameras.length - 1];
-        await scannerRef.current.start(
-          backCam.id,
-          config,
-          (decodedText) => {
-            handleDecodedScan(decodedText);
-          },
-          () => {}
-        );
-      }
+        setCameraStatus('Requesting rear camera permission...');
+        const deviceToUse = explicitDeviceId ?? selectedCameraId;
+        const videoConstraints: MediaTrackConstraints = deviceToUse
+          ? { deviceId: { exact: deviceToUse }, width: { ideal: 1280 }, height: { ideal: 720 } }
+          : { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } };
 
-      setCameraRunning(true);
-      setCameraStatus('Live camera active — hold SABIS® QR pass inside the frame.');
-    } catch {
-      setCameraStatus('Camera unavailable on this device/browser — switched to Manual / Quick Scan.');
-      showToast('Camera unavailable; switched to Manual / Quick Scan mode.', 'warning');
-      setInputMode('manual');
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: videoConstraints,
+          audio: false,
+        });
+
+        streamRef.current = stream;
+
+        // Populate camera list once permission is granted (so officers can switch away from ultra-wide lens if needed)
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const videoInputs = devices.filter((d) => d.kind === 'videoinput');
+          setCameras(videoInputs);
+          const activeTrack = stream.getVideoTracks()[0];
+          const activeDeviceId = activeTrack?.getSettings?.().deviceId || '';
+          if (activeDeviceId) setSelectedCameraId(activeDeviceId);
+        } catch {
+          // ignore enumeration errors
+        }
+
+        const video = videoRef.current;
+        if (!video) throw new Error('Video element not ready');
+        video.srcObject = stream;
+        video.setAttribute('playsinline', 'true');
+        video.muted = true;
+        await video.play();
+
+        if (!detectorRef.current) {
+          detectorRef.current = createNativeBarcodeDetector();
+        }
+
+        setCameraRunning(true);
+        setCameraStatus('Live camera active — point at any SABIS® QR pass.');
+
+        // Scan full video frames at ~10 fps using BarcodeDetector + jsQR
+        scanTimerRef.current = window.setInterval(async () => {
+          if (isDecodingRef.current) return;
+          const v = videoRef.current;
+          const c = canvasRef.current;
+          if (!v || !c || v.readyState < 2 || v.videoWidth === 0 || v.videoHeight === 0) return;
+
+          isDecodingRef.current = true;
+          try {
+            const maxDim = 800;
+            const scale = Math.min(1, maxDim / Math.max(v.videoWidth, v.videoHeight));
+            const targetW = Math.max(1, Math.round(v.videoWidth * scale));
+            const targetH = Math.max(1, Math.round(v.videoHeight * scale));
+            if (c.width !== targetW || c.height !== targetH) {
+              c.width = targetW;
+              c.height = targetH;
+            }
+            const ctx = c.getContext('2d', { willReadFrequently: true });
+            if (!ctx) return;
+
+            ctx.drawImage(v, 0, 0, targetW, targetH);
+            const decoded = await decodeCanvasQr(c, ctx, detectorRef.current);
+            if (decoded) {
+              await handleDecodedScan(decoded);
+            }
+          } finally {
+            isDecodingRef.current = false;
+          }
+        }, 100);
+      } catch (err) {
+        console.error('Camera start failed:', err);
+        setCameraStatus('Camera unavailable on this device/browser — switched to Manual / Image mode.');
+        showToast('Camera unavailable; switched to Manual mode.', 'warning');
+        setInputMode('manual');
+      }
+    },
+    [handleDecodedScan, selectedCameraId, showToast, stopCamera]
+  );
+
+  const handleSwitchCamera = async () => {
+    if (cameras.length < 2) return;
+    const currentIdx = cameras.findIndex((c) => c.deviceId === selectedCameraId);
+    const nextCam = cameras[(currentIdx + 1) % cameras.length];
+    if (nextCam) {
+      setSelectedCameraId(nextCam.deviceId);
+      await startCamera(nextCam.deviceId);
+      showToast(`Switched camera: ${nextCam.label || 'Next lens'}`, 'info');
     }
   };
 
@@ -167,22 +267,53 @@ export const GateControlPage: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const temp = new Html5Qrcode('mobileQrImageDecoder', {
-        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-        useBarCodeDetectorIfSupported: true,
-        verbose: false,
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
       });
-      const decoded = await temp.scanFile(file, false);
-      temp.clear();
-      await handleDecodedScan(decoded);
-    } catch {
-      const match = file.name.match(/EVT-[A-Z0-9]+-[A-Z0-9]+(?:-\d+)?|PAR-[A-Z0-9]+/i);
-      if (match) {
-        await handleDecodedScan(match[0].toUpperCase());
-      } else {
-        const res = await scanQrCodeRef.current('UNREADABLE_QR_IMAGE', activeGateRef.current);
-        setLastResult(res);
+
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const i = new Image();
+        i.onload = () => resolve(i);
+        i.onerror = reject;
+        i.src = dataUrl;
+      });
+
+      const detector = detectorRef.current || createNativeBarcodeDetector();
+      detectorRef.current = detector;
+
+      // Try native resolution (capped to 1200px) and scaled 640px for maximum reliability on phone screenshots
+      let decoded: string | null = null;
+      for (const maxDim of [1200, 640]) {
+        const scale = Math.min(1, maxDim / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
+        const w = Math.max(1, Math.round(img.naturalWidth * scale));
+        const h = Math.max(1, Math.round(img.naturalHeight * scale));
+        const off = document.createElement('canvas');
+        off.width = w;
+        off.height = h;
+        const ctx = off.getContext('2d', { willReadFrequently: true });
+        if (!ctx) continue;
+        ctx.drawImage(img, 0, 0, w, h);
+        decoded = await decodeCanvasQr(off, ctx, detector);
+        if (decoded) break;
       }
+
+      if (decoded) {
+        await handleDecodedScan(decoded);
+      } else {
+        const match = file.name.match(/EVT-[A-Z0-9]+-[A-Z0-9]+(?:-\d+)?|PAR-[A-Z0-9]+/i);
+        if (match) {
+          await handleDecodedScan(match[0].toUpperCase());
+        } else {
+          const res = await scanQrCodeRef.current('UNREADABLE_QR_IMAGE', activeGateRef.current);
+          setLastResult(res);
+        }
+      }
+    } catch {
+      const res = await scanQrCodeRef.current('UNREADABLE_QR_IMAGE', activeGateRef.current);
+      setLastResult(res);
     }
     e.target.value = '';
   };
@@ -336,13 +467,36 @@ export const GateControlPage: React.FC = () => {
                 </button>
               </div>
 
-              {/* Camera Mode */}
+              {/* Camera Mode — Native Full-Frame Video + Dual Engine (BarcodeDetector + jsQR) */}
               {inputMode === 'camera' && (
                 <div className="space-y-3">
-                  <div className="relative rounded-2xl overflow-hidden bg-[#26211E] border border-[#E3DBD3] min-h-[280px] flex flex-col items-center justify-center p-2">
-                    <div id="mobileQrReader" className="w-full max-w-md mx-auto" />
+                  <div className="relative rounded-2xl overflow-hidden bg-[#26211E] border border-[#E3DBD3] min-h-[280px] flex flex-col items-center justify-center">
+                    <video
+                      ref={videoRef}
+                      playsInline
+                      muted
+                      autoPlay
+                      className={`w-full max-h-[380px] object-cover ${cameraRunning ? 'block' : 'hidden'}`}
+                    />
+                    <canvas ref={canvasRef} className="hidden" />
+
+                    {cameraRunning && (
+                      <>
+                        {/* Subtle center alignment frame + scan laser (full frame is still scanned!) */}
+                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                          <div className="w-56 h-56 border-2 border-white/80 rounded-2xl shadow-[0_0_0_9999px_rgba(0,0,0,0.28)] relative overflow-hidden">
+                            <div className="scan-laser w-full" />
+                          </div>
+                        </div>
+                        <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-black/60 text-white text-[11px] font-semibold flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                          <span>{processingScan ? 'Verifying...' : 'Scanning Live'}</span>
+                        </div>
+                      </>
+                    )}
+
                     {!cameraRunning && (
-                      <div className="text-center space-y-3 py-6 px-3">
+                      <div className="text-center space-y-3 py-8 px-4">
                         <div className="w-12 h-12 rounded-2xl bg-[#016836]/25 border border-[#016836] flex items-center justify-center mx-auto">
                           <Camera className="w-6 h-6 text-[#DFF0D8]" />
                         </div>
@@ -352,7 +506,7 @@ export const GateControlPage: React.FC = () => {
                         </p>
                         <button
                           type="button"
-                          onClick={startCamera}
+                          onClick={() => startCamera()}
                           className="px-5 py-2.5 rounded-xl text-xs font-bold bg-[#016836] hover:bg-[#046937] text-white shadow-lg transition"
                         >
                           Start Camera Scanner
@@ -360,16 +514,28 @@ export const GateControlPage: React.FC = () => {
                       </div>
                     )}
                   </div>
-                  <div className="flex items-center justify-between text-xs text-[#7B6E65]">
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#7B6E65]">
                     <span>{cameraStatus}</span>
                     {cameraRunning && (
-                      <button
-                        type="button"
-                        onClick={stopCamera}
-                        className="px-3 py-1 rounded-lg bg-[#F2DEDE] text-[#E53C2E] border border-[#E53C2E]/30 flex items-center gap-1 font-semibold"
-                      >
-                        <StopCircle className="w-3.5 h-3.5" /> Stop
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {cameras.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={handleSwitchCamera}
+                            className="px-3 py-1 rounded-lg bg-[#E6F4FA] text-[#0080BB] border border-[#0080BB]/30 flex items-center gap-1 font-semibold"
+                          >
+                            <SwitchCamera className="w-3.5 h-3.5" /> Switch Lens
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={stopCamera}
+                          className="px-3 py-1 rounded-lg bg-[#F2DEDE] text-[#E53C2E] border border-[#E53C2E]/30 flex items-center gap-1 font-semibold"
+                        >
+                          <StopCircle className="w-3.5 h-3.5" /> Stop
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -378,7 +544,6 @@ export const GateControlPage: React.FC = () => {
               {/* Image Upload Mode */}
               {inputMode === 'image' && (
                 <div className="rounded-2xl border-2 border-dashed border-[#B6ADA4] bg-[#F7F4F2] p-6 text-center space-y-3">
-                  <div id="mobileQrImageDecoder" className="hidden" />
                   <ImageIcon className="w-8 h-8 text-[#016836] mx-auto" />
                   <p className="text-sm font-bold text-[#26211E]">Upload SABIS® QR Pass Screenshot / Image</p>
                   <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-[#016836] hover:bg-[#01522B] text-white transition">
