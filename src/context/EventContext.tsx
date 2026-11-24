@@ -56,7 +56,15 @@ export interface ScanResult {
   registration: Registration | null;
   pass: AttendeePass | null;
   activeGate: string;
+  eventName?: string;
   firstUsedAt?: string | null;
+}
+
+function generateUniqueRegId(): string {
+  const year = new Date().getFullYear().toString().slice(-2);
+  const tsPart = Date.now().toString(36).slice(-4).toUpperCase();
+  const randPart = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `EVT-${year}-${tsPart}${randPart}`;
 }
 
 export interface ToastMessage {
@@ -1035,9 +1043,8 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const targetEvent = events.find((e) => e.id === targetEventId) || activeEvent;
       const targetVenues = getVenuesForEvent(targetEventId);
 
-      const regNumber = nextCounter;
       setNextCounter((c) => c + 1);
-      const regId = `EVT-2026-${regNumber}`;
+      const regId = generateUniqueRegId();
       const partySize = Math.max(1, Math.min(20, Number(input.partySize) || 1));
       const nowIso = new Date().toISOString();
 
@@ -1096,17 +1103,8 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         passes,
       };
 
-      let dispatchMessage: string | undefined;
-      if (isContactDelivery) {
-        const result = await dispatchQrPasses(registration);
-        dispatchMessage = result.message;
-        registration.deliveryStatus = result.ok ? 'sent' : 'queued';
-      }
-
-      setAllRegistrations((prev) => [registration, ...prev]);
-
       if (supabase) {
-        await supabase.from('registrations').insert({
+        const regRow = {
           id: registration.id,
           event_id: registration.eventId,
           parent_number: registration.parentNumber,
@@ -1125,26 +1123,55 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           delivery_mode: registration.deliveryMode,
           delivery_status: registration.deliveryStatus,
           registered_at: registration.registeredAt,
-        });
+        };
 
-        await supabase.from('attendee_passes').insert(
-          passes.map((p) => ({
-            pass_code: p.passCode,
-            event_id: p.eventId,
-            registration_id: p.registrationId,
-            pass_index: p.passIndex,
-            total_passes: p.totalPasses,
-            attendee_label: p.attendeeLabel,
-            attendee_age: p.attendeeAge,
-            attendee_contact: p.attendeeContact,
-            status: p.status,
-          }))
-        );
+        let { error: regErr } = await supabase.from('registrations').insert(regRow);
+        if (regErr && regErr.message.toLowerCase().includes('event_id')) {
+          const { event_id: _omit, ...legacyRow } = regRow;
+          const retry = await supabase.from('registrations').insert(legacyRow);
+          regErr = retry.error;
+        }
+        if (regErr) {
+          console.error('Supabase registration insert failed:', regErr);
+          showToast(`Database save warning: ${regErr.message}`, 'error');
+        }
+
+        const passRows = passes.map((p) => ({
+          pass_code: p.passCode,
+          event_id: p.eventId,
+          registration_id: p.registrationId,
+          pass_index: p.passIndex,
+          total_passes: p.totalPasses,
+          attendee_label: p.attendeeLabel,
+          attendee_age: p.attendeeAge,
+          attendee_contact: p.attendeeContact,
+          status: p.status,
+        }));
+
+        let { error: passErr } = await supabase.from('attendee_passes').insert(passRows);
+        if (passErr && passErr.message.toLowerCase().includes('event_id')) {
+          const legacyPassRows = passRows.map(({ event_id: _omit, ...rest }) => rest);
+          const retry = await supabase.from('attendee_passes').insert(legacyPassRows);
+          passErr = retry.error;
+        }
+        if (passErr) {
+          console.error('Supabase attendee_passes insert failed:', passErr);
+          showToast(`Pass save warning: ${passErr.message}`, 'error');
+        }
       }
+
+      let dispatchMessage: string | undefined;
+      if (isContactDelivery) {
+        const result = await dispatchQrPasses(registration);
+        dispatchMessage = result.message;
+        registration.deliveryStatus = result.ok ? 'sent' : 'queued';
+      }
+
+      setAllRegistrations((prev) => [registration, ...prev]);
 
       return { registration, dispatchMessage };
     },
-    [activeEvent, dispatchQrPasses, events, getVenuesForEvent, nextCounter]
+    [activeEvent, dispatchQrPasses, events, getVenuesForEvent, showToast]
   );
 
   const importCsvRegistrations = useCallback(
@@ -1168,7 +1195,8 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       for (const row of rows) {
         if (!row.name && !row.parentNumber) continue;
-        const regId = `EVT-2026-${counter++}`;
+        const regId = generateUniqueRegId();
+        counter++;
         const partySize = Math.max(1, Math.min(20, Number(row.partySize) || 1));
         const passes: AttendeePass[] = Array.from({ length: partySize }, (_, idx) => ({
           passCode: `${regId}-${idx + 1}`,
@@ -1268,7 +1296,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const recordScanLog = useCallback(async (log: ScanLog) => {
     setAllScanLogs((prev) => [log, ...prev].slice(0, 500));
     if (supabase) {
-      await supabase.from('scan_logs').insert({
+      const logRow = {
         event_id: log.eventId,
         scanned_at: log.scannedAt,
         pass_code: log.passCode,
@@ -1281,7 +1309,12 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         message: log.message,
         first_used_at: log.firstUsedAt || null,
         scanned_by: log.scannedBy,
-      });
+      };
+      const { error } = await supabase.from('scan_logs').insert(logRow);
+      if (error && error.message.toLowerCase().includes('event_id')) {
+        const { event_id: _omit, ...legacyLog } = logRow;
+        await supabase.from('scan_logs').insert(legacyLog);
+      }
     }
   }, []);
 
@@ -1289,70 +1322,155 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     async (rawInput: string, activeGate: string): Promise<ScanResult> => {
       const nowIso = new Date().toISOString();
       const scannerEmail = session?.email || 'gate-terminal';
-      const eventId = activeEvent.id;
 
       let token = rawInput.trim();
       let parsedPassCode = '';
       let parsedRegId = '';
       let parsedParentNumber = '';
 
-      try {
-        if (token.startsWith('{')) {
+      // 1. Parse compact format "SABIS:EVT-26-XXXXXX-1"
+      if (token.toUpperCase().startsWith('SABIS:')) {
+        parsedPassCode = token.slice(6).trim();
+      } else if (token.startsWith('{')) {
+        // 2. Parse legacy JSON QR payloads {"v":5|6, "passCode":"...", ...}
+        try {
           const parsed = JSON.parse(token) as Record<string, unknown>;
           if (parsed.passCode) parsedPassCode = String(parsed.passCode).trim();
           if (parsed.regId) parsedRegId = String(parsed.regId).trim();
           if (parsed.id && !parsedRegId) parsedRegId = String(parsed.id).trim();
           if (parsed.parentNumber) parsedParentNumber = String(parsed.parentNumber).trim();
+        } catch {
+          // treat as raw code
         }
-      } catch {
-        // raw code
       }
 
       const upperRaw = token.toUpperCase();
       const upperPass = (parsedPassCode || upperRaw).toUpperCase();
+      const lookupKey = (parsedRegId || parsedParentNumber || upperPass).toUpperCase();
 
       let matchedReg: Registration | null = null;
       let matchedPass: AttendeePass | null = null;
 
-      // Search passes within the active event first
-      for (const reg of registrations) {
-        const foundPass = reg.passes.find((p) => p.passCode.toUpperCase() === upperPass);
-        if (foundPass) {
-          matchedReg = reg;
-          matchedPass = foundPass;
-          break;
+      // Helper to search a registration list by exact passCode, regId, or parentNumber
+      const findInList = (list: Registration[]) => {
+        for (const reg of list) {
+          const foundPass = reg.passes.find((p) => p.passCode.toUpperCase() === upperPass);
+          if (foundPass) return { reg, pass: foundPass };
         }
-      }
-
-      if (!matchedReg) {
-        const lookupKey = (parsedRegId || parsedParentNumber || upperRaw).toUpperCase();
-        const foundReg = registrations.find(
+        const foundReg = list.find(
           (r) =>
             r.id.toUpperCase() === lookupKey ||
             (r.parentNumber && r.parentNumber.toUpperCase() === lookupKey)
         );
         if (foundReg) {
-          matchedReg = foundReg;
-          matchedPass =
+          const nextPass =
             foundReg.passes.find((p) => p.status === 'PENDING') || foundReg.passes[0] || null;
+          return { reg: foundReg, pass: nextPass };
+        }
+        return null;
+      };
+
+      // Step A: Search active event first, then ALL events in memory (handles gate officer on another event)
+      const localMatch = findInList(registrations) || findInList(allRegistrations);
+      if (localMatch) {
+        matchedReg = localMatch.reg;
+        matchedPass = localMatch.pass;
+      }
+
+      // Step B: Live Supabase fallback lookup (immediately recognizes brand-new registrations before Realtime arrives!)
+      if (!matchedReg && supabase) {
+        try {
+          const { data: passRow } = await supabase
+            .from('attendee_passes')
+            .select('*')
+            .ilike('pass_code', upperPass)
+            .maybeSingle();
+
+          let regRow: Record<string, unknown> | null = null;
+          if (passRow) {
+            const { data: rData } = await supabase
+              .from('registrations')
+              .select('*')
+              .eq('id', passRow.registration_id)
+              .maybeSingle();
+            regRow = rData;
+          } else {
+            const { data: rData } = await supabase
+              .from('registrations')
+              .select('*')
+              .or(`id.ilike.${lookupKey},parent_number.ilike.${lookupKey}`)
+              .limit(1)
+              .maybeSingle();
+            regRow = rData;
+          }
+
+          if (regRow) {
+            const regIdStr = String(regRow.id);
+            const { data: regPasses } = await supabase
+              .from('attendee_passes')
+              .select('*')
+              .eq('registration_id', regIdStr)
+              .order('pass_index', { ascending: true });
+
+            const mappedPasses: AttendeePass[] = (regPasses || []).map((p) => ({
+              passCode: p.pass_code,
+              eventId: p.event_id || String(regRow!.event_id || DEFAULT_EVENT_ID),
+              registrationId: p.registration_id,
+              passIndex: p.pass_index,
+              totalPasses: p.total_passes,
+              attendeeLabel: p.attendee_label || '',
+              attendeeAge: p.attendee_age || '',
+              attendeeContact: p.attendee_contact || '',
+              status: p.status === 'USED' ? 'USED' : 'PENDING',
+              usedAt: p.used_at,
+              usedGate: p.used_gate,
+              scannedBy: p.scanned_by,
+            }));
+
+            const hydratedReg: Registration = {
+              id: regIdStr,
+              eventId: String(regRow.event_id || DEFAULT_EVENT_ID),
+              parentNumber: String(regRow.parent_number || ''),
+              name: String(regRow.name || ''),
+              phone: String(regRow.phone || ''),
+              email: String(regRow.email || ''),
+              schoolType: (regRow.school_type || '') as Registration['schoolType'],
+              schoolBranch: String(regRow.school_branch || ''),
+              schoolOther: String(regRow.school_other || ''),
+              category: regRow.category === 'VIP' ? 'VIP' : 'Parent',
+              assignedGate: String(regRow.assigned_gate || ''),
+              partySize: Number(regRow.party_size) || 1,
+              attendeeAges: Array.isArray(regRow.attendee_ages) ? (regRow.attendee_ages as string[]) : [],
+              otherAttendees: Array.isArray(regRow.other_attendees)
+                ? (regRow.other_attendees as OtherAttendeeDetail[])
+                : [],
+              notes: String(regRow.notes || ''),
+              deliveryMode: regRow.delivery_mode === 'contact_info' ? 'contact_info' : 'on_screen',
+              deliveryStatus: (regRow.delivery_status || 'displayed') as Registration['deliveryStatus'],
+              registeredAt: String(regRow.registered_at || nowIso),
+              passes: mappedPasses,
+            };
+
+            matchedReg = hydratedReg;
+            matchedPass =
+              mappedPasses.find((p) => p.passCode.toUpperCase() === upperPass) ||
+              mappedPasses.find((p) => p.status === 'PENDING') ||
+              mappedPasses[0] ||
+              null;
+
+            setAllRegistrations((prev) =>
+              prev.some((r) => r.id === hydratedReg.id) ? prev : [hydratedReg, ...prev]
+            );
+          }
+        } catch (err) {
+          console.error('Live Supabase pass lookup failed:', err);
         }
       }
 
-      // Check if pass belongs to a DIFFERENT event
-      if (!matchedReg) {
-        const otherEventReg = allRegistrations.find(
-          (r) =>
-            r.eventId !== eventId &&
-            (r.passes.some((p) => p.passCode.toUpperCase() === upperPass) ||
-              r.id.toUpperCase() === upperRaw)
-        );
-        const reason = otherEventReg
-          ? `Pass belongs to a different event (${events.find((e) => e.id === otherEventReg.eventId)?.name || otherEventReg.eventId})`
-          : 'Invalid QR code — pass not found in this event';
-
+      if (!matchedReg || !matchedPass) {
         const log: ScanLog = {
           id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          eventId,
+          eventId: activeEvent.id,
           scannedAt: nowIso,
           passCode: (parsedPassCode || token).slice(0, 32),
           registrationId: parsedRegId || '',
@@ -1361,7 +1479,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           tier: 'Unknown',
           gate: activeGate,
           status: 'INVALID',
-          message: reason,
+          message: 'Invalid QR code — pass not found in event database',
           scannedBy: scannerEmail,
         };
         playScannerTone('INVALID', audioMuted);
@@ -1370,45 +1488,20 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           status: 'INVALID',
           scannedAt: nowIso,
           headline: 'INVALID QR — ACCESS DENIED',
-          subtext: reason,
+          subtext: `Code "${(parsedPassCode || token).slice(0, 32)}" was not found in the database.`,
           registration: null,
           pass: null,
           activeGate,
         };
       }
 
-      if (!matchedPass) {
-        const log: ScanLog = {
-          id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          eventId,
-          scannedAt: nowIso,
-          passCode: upperPass.slice(0, 32),
-          registrationId: matchedReg.id,
-          parentNumber: matchedReg.parentNumber,
-          attendeeName: matchedReg.name,
-          tier: matchedReg.category,
-          gate: activeGate,
-          status: 'INVALID',
-          message: 'No valid pass record linked',
-          scannedBy: scannerEmail,
-        };
-        playScannerTone('INVALID', audioMuted);
-        await recordScanLog(log);
-        return {
-          status: 'INVALID',
-          scannedAt: nowIso,
-          headline: 'INVALID QR — ACCESS DENIED',
-          subtext: 'No pass found for this registration.',
-          registration: matchedReg,
-          pass: null,
-          activeGate,
-        };
-      }
+      const passEvent = events.find((e) => e.id === matchedReg!.eventId) || activeEvent;
+      const targetEventId = matchedReg.eventId || activeEvent.id;
 
-      if (activeEvent.strictGateMode && matchedReg.assignedGate !== activeGate) {
+      if (passEvent.strictGateMode && matchedReg.assignedGate !== activeGate) {
         const log: ScanLog = {
           id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          eventId,
+          eventId: targetEventId,
           scannedAt: nowIso,
           passCode: matchedPass.passCode,
           registrationId: matchedReg.id,
@@ -1430,13 +1523,14 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           registration: matchedReg,
           pass: matchedPass,
           activeGate,
+          eventName: passEvent.name,
         };
       }
 
       if (matchedPass.status === 'USED') {
         const log: ScanLog = {
           id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          eventId,
+          eventId: targetEventId,
           scannedAt: nowIso,
           passCode: matchedPass.passCode,
           registrationId: matchedReg.id,
@@ -1459,6 +1553,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           registration: matchedReg,
           pass: matchedPass,
           activeGate,
+          eventName: passEvent.name,
           firstUsedAt: matchedPass.usedAt,
         };
       }
@@ -1483,7 +1578,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       );
 
       if (supabase) {
-        await supabase
+        const { error: updErr } = await supabase
           .from('attendee_passes')
           .update({
             status: 'USED',
@@ -1492,11 +1587,14 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             scanned_by: scannerEmail,
           })
           .eq('pass_code', updatedPass.passCode);
+        if (updErr) {
+          console.error('Failed to mark pass USED in Supabase:', updErr);
+        }
       }
 
       const log: ScanLog = {
         id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        eventId,
+        eventId: targetEventId,
         scannedAt: nowIso,
         passCode: updatedPass.passCode,
         registrationId: matchedReg.id,
@@ -1525,9 +1623,10 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         registration: updatedReg,
         pass: updatedPass,
         activeGate,
+        eventName: passEvent.name,
       };
     },
-    [activeEvent.id, activeEvent.strictGateMode, allRegistrations, audioMuted, events, recordScanLog, registrations, session?.email]
+    [activeEvent, allRegistrations, audioMuted, events, recordScanLog, registrations, session?.email]
   );
 
   const clearScanLogs = useCallback(async () => {

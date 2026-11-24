@@ -2,6 +2,7 @@ import QRCode from 'qrcode';
 import type { AttendeePass, Registration } from '../types';
 
 export const SABIS_GREEN = '#016836';
+export const SABIS_QR_DARK = '#014A26'; // High-contrast SABIS deep green for instant mobile camera decoding
 export const SABIS_GOLD = '#8A6D3B';
 export const SABIS_CREAM = '#F7F4F2';
 export const SABIS_STONE = '#E3DBD3';
@@ -36,19 +37,10 @@ export function formatDateTime(iso?: string | null): string {
   })}`;
 }
 
-export function buildPassQrPayload(registration: Registration, pass: AttendeePass): string {
-  return JSON.stringify({
-    v: 6,
-    eventId: registration.eventId,
-    passCode: pass.passCode,
-    regId: registration.id,
-    passIndex: pass.passIndex,
-    totalPasses: pass.totalPasses,
-    parentNumber: registration.parentNumber || registration.id,
-    name: pass.attendeeLabel || registration.name,
-    tier: registration.category,
-    venue: registration.assignedGate,
-  });
+export function buildPassQrPayload(_registration: Registration, pass: AttendeePass): string {
+  // Compact payload (Version 2-3 QR with large modules) for instant mobile scanning even with center SABIS® crest.
+  // Scanner also remains 100% backward-compatible with legacy JSON payloads and raw pass codes.
+  return `SABIS:${pass.passCode}`;
 }
 
 let cachedCrestImg: HTMLImageElement | null = null;
@@ -74,17 +66,18 @@ function loadImageCached(src: string, cacheKey: 'crest' | 'wordmark'): Promise<H
 
 /**
  * Generates an official SABIS®-branded QR code Data URL:
- * - Modules rendered in official SABIS® Green (#016836)
- * - Error correction level 'H' (30% redundancy)
- * - Official SABIS® crest embedded cleanly in a crisp white center medallion
+ * - High-contrast SABIS® Deep Green (#014A26) modules on crisp white
+ * - Proper 4-module quiet zone (ISO/IEC 18004 standard) + error correction level 'H' (30% redundancy)
+ * - Compact 17% official SABIS® crest medallion in center for instant mobile camera decoding
  */
-export async function generateQrDataUrl(payload: string, width = 240): Promise<string> {
+export async function generateQrDataUrl(payload: string, width = 360): Promise<string> {
+  const renderSize = Math.max(width, 360);
   const baseQrUrl = await QRCode.toDataURL(payload, {
-    width,
-    margin: 2,
+    width: renderSize,
+    margin: 4,
     errorCorrectionLevel: 'H',
     color: {
-      dark: SABIS_GREEN,
+      dark: SABIS_QR_DARK,
       light: '#FFFFFF',
     },
   });
@@ -101,29 +94,29 @@ export async function generateQrDataUrl(payload: string, width = 240): Promise<s
 
     const crest = await loadImageCached('/sabis-crest.png', 'crest');
     const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = width;
+    canvas.width = renderSize;
+    canvas.height = renderSize;
     const ctx = canvas.getContext('2d');
     if (!ctx) return baseQrUrl;
 
-    ctx.drawImage(qrImg, 0, 0, width, width);
+    ctx.drawImage(qrImg, 0, 0, renderSize, renderSize);
 
     if (crest) {
-      const badgeSize = Math.round(width * 0.22);
-      const pad = Math.max(4, Math.round(width * 0.025));
+      // Keep total medallion box <= 18% of QR width so decoding is instantaneous on all phone cameras
+      const badgeSize = Math.round(renderSize * 0.145);
+      const pad = Math.max(4, Math.round(renderSize * 0.016));
       const box = badgeSize + pad * 2;
-      const x = Math.round((width - box) / 2);
-      const y = Math.round((width - box) / 2);
+      const x = Math.round((renderSize - box) / 2);
+      const y = Math.round((renderSize - box) / 2);
       const radius = Math.round(box * 0.2);
 
-      // White protective medallion with subtle SABIS green ring
       ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
       ctx.roundRect(x, y, box, box, radius);
       ctx.fill();
 
       ctx.strokeStyle = SABIS_GREEN;
-      ctx.lineWidth = Math.max(1.5, width * 0.008);
+      ctx.lineWidth = Math.max(1.5, renderSize * 0.006);
       ctx.stroke();
 
       ctx.drawImage(crest, x + pad, y + pad, badgeSize, badgeSize);

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import {
   AlertTriangle,
   Camera,
@@ -8,6 +8,7 @@ import {
   Image as ImageIcon,
   Keyboard,
   QrCode,
+  RefreshCw,
   StopCircle,
   XCircle,
 } from 'lucide-react';
@@ -20,7 +21,7 @@ type MobileTab = 'scanner' | 'logs';
 type InputMode = 'camera' | 'image' | 'manual';
 
 export const GateControlPage: React.FC = () => {
-  const { activeEvent, venues, registrations, scanLogs, scanQrCode, showToast } = useEvent();
+  const { activeEvent, venues, registrations, scanLogs, scanQrCode, refreshData, showToast } = useEvent();
 
   const [mobileTab, setMobileTab] = useState<MobileTab>('scanner');
   const [inputMode, setInputMode] = useState<InputMode>('camera');
@@ -30,10 +31,12 @@ export const GateControlPage: React.FC = () => {
   const [manualCode, setManualCode] = useState('');
   const [selectedSimPass, setSelectedSimPass] = useState('');
   const [lastResult, setLastResult] = useState<ScanResult | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const lastDecodedRef = useRef<{ code: string; ts: number }>({ code: '', ts: 0 });
   const activeGateRef = useRef(activeGate);
+  const scanQrCodeRef = useRef(scanQrCode);
 
   useEffect(() => {
     if (venues.length > 0 && !venues.some((v) => v.name === activeGate)) {
@@ -45,13 +48,22 @@ export const GateControlPage: React.FC = () => {
     activeGateRef.current = activeGate;
   }, [activeGate]);
 
+  // Always keep ref pointing to latest scanQrCode so camera callbacks never use stale registrations!
+  useEffect(() => {
+    scanQrCodeRef.current = scanQrCode;
+  }, [scanQrCode]);
+
   const stopCamera = async () => {
-    if (scannerRef.current && cameraRunning) {
+    if (scannerRef.current) {
       try {
-        await scannerRef.current.stop();
+        if (cameraRunning) {
+          await scannerRef.current.stop();
+        }
+        scannerRef.current.clear();
       } catch {
-        // ignore
+        // ignore cleanup error
       }
+      scannerRef.current = null;
       setCameraRunning(false);
       setCameraStatus('Camera stopped.');
     }
@@ -60,37 +72,90 @@ export const GateControlPage: React.FC = () => {
   useEffect(() => {
     return () => {
       if (scannerRef.current) {
-        scannerRef.current.stop().catch(() => {});
+        scannerRef.current
+          .stop()
+          .then(() => scannerRef.current?.clear())
+          .catch(() => {});
+        scannerRef.current = null;
       }
     };
   }, []);
 
   const handleDecodedScan = async (raw: string) => {
+    const cleaned = String(raw || '').trim();
+    if (!cleaned) return;
+
     const now = Date.now();
-    if (lastDecodedRef.current.code === raw && now - lastDecodedRef.current.ts < 2500) {
+    if (lastDecodedRef.current.code === cleaned && now - lastDecodedRef.current.ts < 2500) {
       return;
     }
-    lastDecodedRef.current = { code: raw, ts: now };
-    const result = await scanQrCode(raw, activeGateRef.current);
+    lastDecodedRef.current = { code: cleaned, ts: now };
+
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      try {
+        navigator.vibrate(80);
+      } catch {
+        // ignore
+      }
+    }
+
+    const result = await scanQrCodeRef.current(cleaned, activeGateRef.current);
     setLastResult(result);
   };
 
   const startCamera = async () => {
     try {
-      if (!scannerRef.current) {
-        scannerRef.current = new Html5Qrcode('mobileQrReader');
+      if (scannerRef.current) {
+        await stopCamera();
       }
+      scannerRef.current = new Html5Qrcode('mobileQrReader', {
+        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+        useBarCodeDetectorIfSupported: true,
+        verbose: false,
+      });
+
       setCameraStatus('Requesting rear camera permission...');
-      await scannerRef.current.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 220, height: 220 } },
-        (decodedText) => {
-          handleDecodedScan(decodedText);
+
+      const config = {
+        fps: 15,
+        qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+          const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+          const size = Math.max(180, Math.floor(minEdge * 0.78));
+          return { width: size, height: size };
         },
-        () => {}
-      );
+        disableFlip: false,
+      };
+
+      try {
+        await scannerRef.current.start(
+          { facingMode: 'environment' },
+          config,
+          (decodedText) => {
+            handleDecodedScan(decodedText);
+          },
+          () => {}
+        );
+      } catch {
+        // Fallback: enumerate cameras and pick rear/first available camera
+        const cameras = await Html5Qrcode.getCameras();
+        if (!cameras || cameras.length === 0) {
+          throw new Error('No cameras available');
+        }
+        const backCam =
+          cameras.find((c) => /back|rear|environment/i.test(c.label)) ||
+          cameras[cameras.length - 1];
+        await scannerRef.current.start(
+          backCam.id,
+          config,
+          (decodedText) => {
+            handleDecodedScan(decodedText);
+          },
+          () => {}
+        );
+      }
+
       setCameraRunning(true);
-      setCameraStatus('Live camera active — hold SABIS® QR pass steady inside the frame.');
+      setCameraStatus('Live camera active — hold SABIS® QR pass inside the frame.');
     } catch {
       setCameraStatus('Camera unavailable on this device/browser — switched to Manual / Quick Scan.');
       showToast('Camera unavailable; switched to Manual / Quick Scan mode.', 'warning');
@@ -102,15 +167,20 @@ export const GateControlPage: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const temp = new Html5Qrcode('mobileQrImageDecoder');
+      const temp = new Html5Qrcode('mobileQrImageDecoder', {
+        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+        useBarCodeDetectorIfSupported: true,
+        verbose: false,
+      });
       const decoded = await temp.scanFile(file, false);
+      temp.clear();
       await handleDecodedScan(decoded);
     } catch {
-      const match = file.name.match(/EVT-\d{4}-\d+(?:-\d+)?|PAR-\d+/i);
+      const match = file.name.match(/EVT-[A-Z0-9]+-[A-Z0-9]+(?:-\d+)?|PAR-[A-Z0-9]+/i);
       if (match) {
         await handleDecodedScan(match[0].toUpperCase());
       } else {
-        const res = await scanQrCode('UNREADABLE_QR_IMAGE', activeGate);
+        const res = await scanQrCodeRef.current('UNREADABLE_QR_IMAGE', activeGateRef.current);
         setLastResult(res);
       }
     }
@@ -120,7 +190,7 @@ export const GateControlPage: React.FC = () => {
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualCode.trim()) return;
-    const result = await scanQrCode(manualCode.trim(), activeGate);
+    const result = await scanQrCodeRef.current(manualCode.trim(), activeGateRef.current);
     setLastResult(result);
     setManualCode('');
   };
@@ -134,8 +204,15 @@ export const GateControlPage: React.FC = () => {
     if (!targetCode) return;
     const found = allPasses.find((x) => x.pass.passCode === targetCode);
     const payload = found ? buildPassQrPayload(found.reg, found.pass) : targetCode;
-    const res = await scanQrCode(payload, activeGate);
+    const res = await scanQrCodeRef.current(payload, activeGateRef.current);
     setLastResult(res);
+  };
+
+  const handleRefreshPasses = async () => {
+    setRefreshing(true);
+    await refreshData();
+    setRefreshing(false);
+    showToast('Synced latest registrations & passes', 'success');
   };
 
   return (
@@ -143,11 +220,22 @@ export const GateControlPage: React.FC = () => {
       <TopBar />
 
       <main className="max-w-3xl mx-auto w-full px-4 py-5 space-y-5 flex-1">
-        <div className="text-center">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-[#016836]">
-            {activeEvent.name}
-          </span>
-          <h2 className="text-lg font-bold text-[#26211E]">Mobile Gate Control Terminal</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[#016836]">
+              {activeEvent.name}
+            </span>
+            <h2 className="text-lg font-bold text-[#26211E]">Mobile Gate Control Terminal</h2>
+          </div>
+          <button
+            type="button"
+            disabled={refreshing}
+            onClick={handleRefreshPasses}
+            className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white hover:bg-[#EDF6F1] text-[#016836] border border-[#E3DBD3] flex items-center gap-1.5 shadow-sm transition disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+            <span>{allPasses.length} Passes Synced</span>
+          </button>
         </div>
 
         {/* Mobile Gate Control Mode Tabs */}
@@ -251,15 +339,10 @@ export const GateControlPage: React.FC = () => {
               {/* Camera Mode */}
               {inputMode === 'camera' && (
                 <div className="space-y-3">
-                  <div className="relative rounded-2xl overflow-hidden bg-[#26211E] border border-[#E3DBD3] min-h-[250px] flex flex-col items-center justify-center p-4">
-                    <div id="mobileQrReader" className="w-full max-w-sm mx-auto" />
-                    {cameraRunning && (
-                      <div className="absolute inset-x-8 top-4 pointer-events-none">
-                        <div className="scan-laser w-full" />
-                      </div>
-                    )}
+                  <div className="relative rounded-2xl overflow-hidden bg-[#26211E] border border-[#E3DBD3] min-h-[280px] flex flex-col items-center justify-center p-2">
+                    <div id="mobileQrReader" className="w-full max-w-md mx-auto" />
                     {!cameraRunning && (
-                      <div className="text-center space-y-3 py-5">
+                      <div className="text-center space-y-3 py-6 px-3">
                         <div className="w-12 h-12 rounded-2xl bg-[#016836]/25 border border-[#016836] flex items-center justify-center mx-auto">
                           <Camera className="w-6 h-6 text-[#DFF0D8]" />
                         </div>
@@ -310,14 +393,14 @@ export const GateControlPage: React.FC = () => {
                 <div className="space-y-4">
                   <form onSubmit={handleManualSubmit} className="space-y-2">
                     <label className="block text-xs font-bold text-[#26211E]">
-                      Enter Pass Code (e.g., EVT-2026-1004-1) or Parent #
+                      Enter Pass Code (e.g., EVT-26-...-1) or Parent #
                     </label>
                     <div className="flex gap-2">
                       <input
                         type="text"
                         value={manualCode}
                         onChange={(e) => setManualCode(e.target.value)}
-                        placeholder="EVT-2026-1004-1 or PAR-11530"
+                        placeholder="EVT-26-...-1 or PAR-11530"
                         className="flex-1 px-3.5 py-2.5 rounded-xl bg-white border border-[#B6ADA4] text-xs sm:text-sm font-mono text-[#26211E] focus:outline-none focus:border-[#016836]"
                       />
                       <button
@@ -362,7 +445,7 @@ export const GateControlPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={async () => {
-                        const res = await scanQrCode('FAKE-PASS-9999', activeGate);
+                        const res = await scanQrCodeRef.current('FAKE-PASS-9999', activeGateRef.current);
                         setLastResult(res);
                       }}
                       className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#F2DEDE] hover:bg-[#E53C2E] hover:text-white text-[#E53C2E] border border-[#E53C2E]/35 transition"
@@ -420,6 +503,11 @@ export const GateControlPage: React.FC = () => {
                       {lastResult.headline}
                     </h3>
                     <p className="text-xs text-[#26211E]/85 mt-0.5">{lastResult.subtext}</p>
+                    {lastResult.eventName && (
+                      <p className="text-xs font-semibold text-[#016836] mt-0.5">
+                        Event: {lastResult.eventName}
+                      </p>
+                    )}
                     {lastResult.status === 'USED' && lastResult.firstUsedAt && (
                       <p className="text-xs font-mono font-bold text-[#8A6D3B] mt-1">
                         Previously Used At: {formatTimeOnly(lastResult.firstUsedAt)}
