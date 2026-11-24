@@ -11,14 +11,18 @@ import {
   RefreshCw,
   StopCircle,
   SwitchCamera,
+  UserPlus,
   XCircle,
 } from 'lucide-react';
 import { EventLogsPanel } from '../components/EventLogsPanel';
+import { PassInspectorModal } from '../components/PassInspectorModal';
+import { StaffDeskRegistration } from '../components/StaffDeskRegistration';
 import { TopBar } from '../components/TopBar';
 import { useEvent, type ScanResult } from '../context/EventContext';
 import { buildPassQrPayload, formatTimeOnly, getSchoolDisplay } from '../lib/qr';
+import type { Registration } from '../types';
 
-type MobileTab = 'scanner' | 'logs';
+type MobileTab = 'scanner' | 'desk' | 'logs';
 type InputMode = 'camera' | 'image' | 'manual';
 
 interface BrowserBarcodeDetector {
@@ -87,6 +91,7 @@ export const GateControlPage: React.FC = () => {
   const [lastResult, setLastResult] = useState<ScanResult | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [processingScan, setProcessingScan] = useState(false);
+  const [inspectingReg, setInspectingReg] = useState<Registration | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -366,7 +371,11 @@ export const GateControlPage: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-[#F7F4F2]">
       <TopBar />
 
-      <main className="max-w-3xl mx-auto w-full px-4 py-5 space-y-5 flex-1">
+      <main
+        className={`${
+          mobileTab === 'desk' ? 'max-w-7xl' : 'max-w-3xl'
+        } mx-auto w-full px-4 py-5 space-y-5 flex-1 transition-all`}
+      >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <span className="text-[11px] font-bold uppercase tracking-wider text-[#016836]">
@@ -385,19 +394,34 @@ export const GateControlPage: React.FC = () => {
           </button>
         </div>
 
-        {/* Mobile Gate Control Mode Tabs */}
-        <div className="grid grid-cols-2 gap-2 bg-white p-1.5 rounded-2xl border border-[#E3DBD3] shadow-sm">
+        {/* Gate Control Mode Tabs */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-white p-1.5 rounded-2xl border border-[#E3DBD3] shadow-sm">
           <button
             type="button"
             onClick={() => setMobileTab('scanner')}
             className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition ${
               mobileTab === 'scanner'
                 ? 'bg-[#016836] text-white shadow-sm'
-                : 'text-[#7B6E65] hover:text-[#26211E]'
+                : 'text-[#7B6E65] hover:text-[#26211E] hover:bg-[#F7F4F2]'
             }`}
           >
-            <QrCode className="w-4 h-4" />
+            <QrCode className="w-4 h-4 shrink-0" />
             <span>Gate QR Scanner</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (cameraRunning) stopCamera();
+              setMobileTab('desk');
+            }}
+            className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 text-center leading-tight transition ${
+              mobileTab === 'desk'
+                ? 'bg-[#016836] text-white shadow-sm'
+                : 'text-[#7B6E65] hover:text-[#26211E] hover:bg-[#F7F4F2]'
+            }`}
+          >
+            <UserPlus className="w-4 h-4 shrink-0" />
+            <span>Staff Desk Manual Registration &amp; Pass Lookup</span>
           </button>
           <button
             type="button"
@@ -408,10 +432,10 @@ export const GateControlPage: React.FC = () => {
             className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition ${
               mobileTab === 'logs'
                 ? 'bg-[#0080BB] text-white shadow-sm'
-                : 'text-[#7B6E65] hover:text-[#26211E]'
+                : 'text-[#7B6E65] hover:text-[#26211E] hover:bg-[#F7F4F2]'
             }`}
           >
-            <Clock className="w-4 h-4" />
+            <Clock className="w-4 h-4 shrink-0" />
             <span>Event Logs ({scanLogs.length})</span>
           </button>
         </div>
@@ -732,10 +756,14 @@ export const GateControlPage: React.FC = () => {
 
             <EventLogsPanel logs={scanLogs} canClear={false} compact={true} />
           </div>
+        ) : mobileTab === 'desk' ? (
+          <StaffDeskRegistration onInspectAllPasses={setInspectingReg} />
         ) : (
           <EventLogsPanel logs={scanLogs} canClear={false} />
         )}
       </main>
+
+      <PassInspectorModal registration={inspectingReg} onClose={() => setInspectingReg(null)} />
     </div>
   );
 };
