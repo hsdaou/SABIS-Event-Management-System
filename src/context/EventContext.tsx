@@ -294,6 +294,16 @@ function normalizePhoneDigits(phone?: string): string {
   return String(phone || '').replace(/\D/g, '');
 }
 
+function phonesMatch(a?: string, b?: string): boolean {
+  const da = normalizePhoneDigits(a);
+  const db = normalizePhoneDigits(b);
+  if (da.length < 6 || db.length < 6) return false;
+  if (da === db) return true;
+  // Match local vs international format (e.g. 050 123 4567 and +971 50 123 4567 -> last 9 digits 501234567)
+  if (da.length >= 9 && db.length >= 9 && da.slice(-9) === db.slice(-9)) return true;
+  return false;
+}
+
 function hydrateRegistrationFromRpc(
   regRow: Record<string, unknown>,
   passRows: Array<Record<string, unknown>>
@@ -1233,7 +1243,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (r.eventId !== eventId) return false;
         if (pNum && r.parentNumber && r.parentNumber.trim().toUpperCase() === pNum) return true;
         if (email && r.email && r.email.trim().toLowerCase() === email) return true;
-        if (phoneDigits.length >= 6 && normalizePhoneDigits(r.phone) === phoneDigits) return true;
+        if (phoneDigits.length >= 6 && phonesMatch(r.phone, lookup.phone)) return true;
         return false;
       });
 

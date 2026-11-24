@@ -193,7 +193,7 @@ export const InvitationPage: React.FC = () => {
         return;
       }
       if (schoolType === 'sabis_isc' && !schoolBranch) {
-        showToast('Please select your SABIS® / ISC school branch from the dropdown.', 'warning');
+        showToast('Please select a school from SABIS Schools in the dropdown.', 'warning');
         return;
       }
       if (schoolType === 'other' && !schoolOther.trim()) {

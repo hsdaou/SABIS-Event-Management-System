@@ -41,7 +41,7 @@ interface FieldToggleDescriptor {
   group: 'current' | 'extra';
 }
 
-const OTHER_FIELD_TOGGLES: FieldToggleDescriptor[] = [
+const ALL_FIELD_TOGGLES: FieldToggleDescriptor[] = [
   {
     key: 'parentNumber',
     label: 'Parent Number',
@@ -55,6 +55,18 @@ const OTHER_FIELD_TOGGLES: FieldToggleDescriptor[] = [
     group: 'current',
   },
   {
+    key: 'phone',
+    label: 'Register Phone Number',
+    description: 'Dedicated mobile phone field on the Registration Portal',
+    group: 'current',
+  },
+  {
+    key: 'email',
+    label: 'Register Email Address',
+    description: 'Dedicated email field on the Registration Portal',
+    group: 'current',
+  },
+  {
     key: 'numAttendees',
     label: 'Number of Attendees',
     description: 'Controls how many individual SABIS® QR codes are generated/sent (1 per attendee)',
@@ -63,7 +75,7 @@ const OTHER_FIELD_TOGGLES: FieldToggleDescriptor[] = [
   {
     key: 'school',
     label: 'Which school are your kids attending?',
-    description: 'Shows SABIS® / ISC (12 UAE branches dropdown) or Other School selector',
+    description: 'Shows SABIS Schools (12 UAE branches dropdown) or Other School selector',
     group: 'extra',
   },
   {
@@ -344,8 +356,8 @@ export const ControlDashboardPage: React.FC = () => {
     [authorizedUsers]
   );
 
-  const currentFields = OTHER_FIELD_TOGGLES.filter((f) => f.group === 'current');
-  const extraFields = OTHER_FIELD_TOGGLES.filter((f) => f.group === 'extra');
+  const currentFields = ALL_FIELD_TOGGLES.filter((f) => f.group === 'current');
+  const extraFields = ALL_FIELD_TOGGLES.filter((f) => f.group === 'extra');
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F4F2]">
@@ -480,20 +492,20 @@ export const ControlDashboardPage: React.FC = () => {
           </nav>
         </div>
 
-        {/* ==================== TAB 1: FORM FIELDS, SEPARATE PHONE/EMAIL REQUIREMENTS & QR DELIVERY ==================== */}
+        {/* ==================== TAB 1: FORM FIELDS, REQUIREMENTS & QR DELIVERY ==================== */}
         {activeTab === 'form' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* Field Visibility & Required Toggles */}
             <div className="lg:col-span-7 space-y-5">
-              {/* Dedicated Separate Phone Number & Email Controls */}
+              {/* All Invitation Page Field Controls (Show/Hide + Required/Optional) */}
               <div className="glass-panel rounded-2xl p-5 sm:p-6 border-t-4 border-t-[#016836] space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E3DBD3] pb-3.5">
                   <div>
                     <h3 className="text-base font-bold text-[#26211E]">
-                      Separate Phone Number &amp; Email Controls
+                      All Invitation Page Field Controls (Visibility &amp; Required)
                     </h3>
                     <p className="text-xs text-[#7B6E65] mt-0.5">
-                      Control whether Phone Number and Email appear on the Registration Portal and choose which one is required
+                      Toggle any field ON/OFF and choose whether it is Required or Optional for <strong>{activeEvent.name}</strong>
                     </p>
                   </div>
                   <a
@@ -509,9 +521,9 @@ export const ControlDashboardPage: React.FC = () => {
                   </a>
                 </div>
 
-                {/* Quick Presets for Required Contact Field */}
+                {/* Quick Presets for Phone & Email Requirement */}
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[11px] font-bold text-[#7B6E65] mr-1">Quick Requirement:</span>
+                  <span className="text-[11px] font-bold text-[#7B6E65] mr-1">Quick Contact Preset:</span>
                   <button
                     type="button"
                     onClick={() => {
@@ -581,132 +593,6 @@ export const ControlDashboardPage: React.FC = () => {
                   </button>
                 </div>
 
-                {/* Separate Phone Row */}
-                <div className="p-4 rounded-xl bg-[#F7F4F2] border border-[#E3DBD3] flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-start gap-2.5">
-                    <div className="w-9 h-9 rounded-lg bg-white border border-[#E3DBD3] flex items-center justify-center text-[#016836] shrink-0">
-                      <Phone className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-[#26211E]">Register Phone Number</p>
-                      <p className="text-xs text-[#7B6E65]">
-                        Dedicated mobile phone field on the Registration Portal
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      disabled={!settings.fieldToggles.phone}
-                      onClick={() => {
-                        const next = !settings.requiredFields.phone;
-                        updateRequiredField('phone', next);
-                        showToast(`Phone Number is now ${next ? 'REQUIRED' : 'OPTIONAL'}`, 'info');
-                      }}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold border transition disabled:opacity-40 ${
-                        settings.requiredFields.phone
-                          ? 'bg-[#F2DEDE] text-[#E53C2E] border-[#E53C2E]/35'
-                          : 'bg-white text-[#7B6E65] border-[#E3DBD3]'
-                      }`}
-                    >
-                      {settings.requiredFields.phone ? 'Required *' : 'Optional'}
-                    </button>
-                    <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#7B6E65]">
-                      <span>Show</span>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={settings.fieldToggles.phone}
-                        onClick={() => {
-                          updateFieldToggle('phone', !settings.fieldToggles.phone);
-                          showToast(
-                            `Phone Number field ${!settings.fieldToggles.phone ? 'shown' : 'hidden'}`,
-                            'info'
-                          );
-                        }}
-                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
-                          settings.fieldToggles.phone ? 'bg-[#016836]' : 'bg-[#B6ADA4]'
-                        }`}
-                      >
-                        <span
-                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${
-                            settings.fieldToggles.phone ? 'translate-x-5' : 'translate-x-0'
-                          }`}
-                        />
-                      </button>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Separate Email Row */}
-                <div className="p-4 rounded-xl bg-[#F7F4F2] border border-[#E3DBD3] flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-start gap-2.5">
-                    <div className="w-9 h-9 rounded-lg bg-white border border-[#E3DBD3] flex items-center justify-center text-[#0080BB] shrink-0">
-                      <Mail className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-[#26211E]">Register Email Address</p>
-                      <p className="text-xs text-[#7B6E65]">
-                        Dedicated email field on the Registration Portal
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      disabled={!settings.fieldToggles.email}
-                      onClick={() => {
-                        const next = !settings.requiredFields.email;
-                        updateRequiredField('email', next);
-                        showToast(`Email Address is now ${next ? 'REQUIRED' : 'OPTIONAL'}`, 'info');
-                      }}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold border transition disabled:opacity-40 ${
-                        settings.requiredFields.email
-                          ? 'bg-[#F2DEDE] text-[#E53C2E] border-[#E53C2E]/35'
-                          : 'bg-white text-[#7B6E65] border-[#E3DBD3]'
-                      }`}
-                    >
-                      {settings.requiredFields.email ? 'Required *' : 'Optional'}
-                    </button>
-                    <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#7B6E65]">
-                      <span>Show</span>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={settings.fieldToggles.email}
-                        onClick={() => {
-                          updateFieldToggle('email', !settings.fieldToggles.email);
-                          showToast(
-                            `Email field ${!settings.fieldToggles.email ? 'shown' : 'hidden'}`,
-                            'info'
-                          );
-                        }}
-                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
-                          settings.fieldToggles.email ? 'bg-[#016836]' : 'bg-[#B6ADA4]'
-                        }`}
-                      >
-                        <span
-                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${
-                            settings.fieldToggles.email ? 'translate-x-5' : 'translate-x-0'
-                          }`}
-                        />
-                      </button>
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              {/* Other Invitation Page Field Toggles (Show/Hide + Required/Optional) */}
-              <div className="glass-panel rounded-2xl p-5 sm:p-6 space-y-4">
-                <div className="border-b border-[#E3DBD3] pb-3">
-                  <h3 className="text-base font-bold text-[#26211E]">
-                    All Invitation Page Field Controls (Visibility &amp; Required)
-                  </h3>
-                  <p className="text-xs text-[#7B6E65] mt-0.5">
-                    Toggle any field ON/OFF and choose whether it is Required or Optional for <strong>{activeEvent.name}</strong>
-                  </p>
-                </div>
-
                 <div className="space-y-2.5">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-[#016836]">
                     Core Registration Fields
@@ -719,9 +605,21 @@ export const ControlDashboardPage: React.FC = () => {
                         key={item.key}
                         className="p-3.5 rounded-xl bg-[#F7F4F2] border border-[#E3DBD3] flex flex-wrap items-center justify-between gap-3"
                       >
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-bold text-[#26211E]">{item.label}</p>
-                          <p className="text-xs text-[#7B6E65] mt-0.5">{item.description}</p>
+                        <div className="min-w-0 flex-1 flex items-start gap-2.5">
+                          {item.key === 'phone' && (
+                            <div className="w-8 h-8 rounded-lg bg-white border border-[#E3DBD3] flex items-center justify-center text-[#016836] shrink-0 mt-0.5">
+                              <Phone className="w-4 h-4" />
+                            </div>
+                          )}
+                          {item.key === 'email' && (
+                            <div className="w-8 h-8 rounded-lg bg-white border border-[#E3DBD3] flex items-center justify-center text-[#0080BB] shrink-0 mt-0.5">
+                              <Mail className="w-4 h-4" />
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-[#26211E]">{item.label}</p>
+                            <p className="text-xs text-[#7B6E65] mt-0.5">{item.description}</p>
+                          </div>
                         </div>
                         <div className="flex items-center gap-3 shrink-0">
                           <button

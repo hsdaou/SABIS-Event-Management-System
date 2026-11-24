@@ -1,5 +1,5 @@
 import React from 'react';
-import { ISC_BRANCHES, SIS_BRANCHES } from '../constants/schools';
+import { ALL_SABIS_BRANCHES } from '../constants/schools';
 
 interface SchoolSelectorFieldProps {
   schoolType: 'sabis_isc' | 'other' | '';
@@ -41,7 +41,7 @@ export const SchoolSelectorField: React.FC<SchoolSelectorFieldProps> = ({
                 : 'bg-white border-[#E3DBD3] text-[#26211E] hover:border-[#016836]/60'
             }`}
           >
-            SABIS® / International School of Choueifat (ISC)
+            SABIS Schools
           </button>
           <button
             type="button"
@@ -63,7 +63,7 @@ export const SchoolSelectorField: React.FC<SchoolSelectorFieldProps> = ({
       {schoolType === 'sabis_isc' && (
         <div>
           <label className="block text-xs font-bold text-[#016836] mb-1.5">
-            Select SABIS® / ISC Branch {required && <span className="text-[#E53C2E]">*</span>}
+            SABIS Schools {required && <span className="text-[#E53C2E]">*</span>}
           </label>
           <select
             value={schoolBranch}
@@ -71,16 +71,9 @@ export const SchoolSelectorField: React.FC<SchoolSelectorFieldProps> = ({
             onChange={(e) => onChangeBranch(e.target.value)}
             className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#016836]/40 text-xs sm:text-sm text-[#26211E] focus:outline-none focus:border-[#016836]"
           >
-            <option value="">-- Choose ISC or SIS Branch --</option>
-            <optgroup label="The International School of Choueifat (ISC) Branches">
-              {ISC_BRANCHES.map((branch) => (
-                <option key={branch} value={branch}>
-                  {branch}
-                </option>
-              ))}
-            </optgroup>
-            <optgroup label="SABIS® International School (SIS) Branches">
-              {SIS_BRANCHES.map((branch) => (
+            <option value="">-- Select a SABIS School --</option>
+            <optgroup label="SABIS Schools">
+              {ALL_SABIS_BRANCHES.map((branch) => (
                 <option key={branch} value={branch}>
                   {branch}
                 </option>

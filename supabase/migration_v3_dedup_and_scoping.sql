@@ -92,7 +92,17 @@ begin
     and (
       (v_pnum <> '' and upper(trim(r.parent_number)) = v_pnum)
       or (v_email <> '' and lower(trim(r.email)) = v_email)
-      or (length(v_phone_digits) >= 6 and regexp_replace(coalesce(r.phone, ''), '\D', '', 'g') = v_phone_digits)
+      or (
+        length(v_phone_digits) >= 6
+        and (
+          regexp_replace(coalesce(r.phone, ''), '\D', '', 'g') = v_phone_digits
+          or (
+            length(v_phone_digits) >= 9
+            and length(regexp_replace(coalesce(r.phone, ''), '\D', '', 'g')) >= 9
+            and right(regexp_replace(coalesce(r.phone, ''), '\D', '', 'g'), 9) = right(v_phone_digits, 9)
+          )
+        )
+      )
     )
   order by r.registered_at desc
   limit 1;
