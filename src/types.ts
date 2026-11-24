@@ -64,6 +64,7 @@ export interface AuthorizedUser {
   fullName: string;
   role: UserRole;
   active: boolean;
+  allowedEventIds: string[]; // For 'regular' & 'gate' roles; 'control' always has access to all events
   addedBy: string;
   createdAt: string;
 }
@@ -130,5 +131,6 @@ export interface AuthSession {
   email: string;
   fullName: string;
   role: UserRole;
+  allowedEventIds: string[];
   isSupabaseAuth: boolean;
 }

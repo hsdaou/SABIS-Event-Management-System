@@ -1,0 +1,18 @@
+name: Supabase Keep-Alive Ping
+
+on:
+  schedule:
+    # Runs twice a week: every Monday and Thursday at 08:00 UTC (12:00 PM UAE)
+    - cron: '0 8 * * 1,4'
+  workflow_dispatch:
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase via Vercel Keep-Alive Endpoint
+        run: |
+          echo "Pinging SABIS Event Management System keep-alive endpoint..."
+          RESPONSE=$(curl -fsSL -w "\nHTTP_STATUS:%{http_code}" "https://sabis-event-management-system.vercel.app/api/keepalive")
+          echo "$RESPONSE"
+          echo "$RESPONSE" | grep -q '"ok":true' || (echo "Keep-alive ping returned non-ok status" && exit 1)

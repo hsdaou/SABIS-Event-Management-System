@@ -127,7 +127,15 @@ export const ControlDashboardPage: React.FC = () => {
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserName, setNewUserName] = useState('');
   const [newUserRole, setNewUserRole] = useState<UserRole>('regular');
+  const [newUserEventIds, setNewUserEventIds] = useState<string[]>([activeEvent.id]);
   const [userError, setUserError] = useState('');
+
+  useEffect(() => {
+    setNewUserEventIds((prev) => {
+      const valid = prev.filter((id) => events.some((e) => e.id === id));
+      return valid.length > 0 ? valid : [activeEvent.id];
+    });
+  }, [activeEvent.id, events]);
 
   // Email delivery health status
   const [emailStatus, setEmailStatus] = useState<{
@@ -294,7 +302,16 @@ export const ControlDashboardPage: React.FC = () => {
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setUserError('');
-    const res = await addAuthorizedUser(newUserEmail, newUserName, newUserRole);
+    if (newUserRole !== 'control' && newUserEventIds.length === 0) {
+      setUserError('Please select at least one authorized event for this user.');
+      return;
+    }
+    const res = await addAuthorizedUser(
+      newUserEmail,
+      newUserName,
+      newUserRole,
+      newUserRole === 'control' ? [] : newUserEventIds
+    );
     if (!res.ok) {
       setUserError(res.error || 'Could not add user.');
       return;
@@ -302,6 +319,20 @@ export const ControlDashboardPage: React.FC = () => {
     showToast(`Added ${newUserEmail} as ${newUserRole.toUpperCase()} user`, 'success');
     setNewUserEmail('');
     setNewUserName('');
+  };
+
+  const toggleNewUserEvent = (eventId: string) => {
+    setNewUserEventIds((prev) =>
+      prev.includes(eventId) ? prev.filter((id) => id !== eventId) : [...prev, eventId]
+    );
+  };
+
+  const toggleExistingUserEvent = async (userId: string, currentIds: string[], eventId: string) => {
+    const nextIds = currentIds.includes(eventId)
+      ? currentIds.filter((id) => id !== eventId)
+      : [...currentIds, eventId];
+    await updateAuthorizedUser(userId, { allowedEventIds: nextIds });
+    showToast('Updated event access permissions', 'success');
   };
 
   const tierCounts = useMemo(
@@ -1350,6 +1381,45 @@ export const ControlDashboardPage: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Event-Specific Authorization Picker (for School Dashboard & Gate Control) */}
+                {newUserRole !== 'control' ? (
+                  <div className="p-3.5 rounded-xl bg-[#F7F4F2] border border-[#E3DBD3] space-y-2">
+                    <label className="block text-xs font-bold text-[#26211E]">
+                      Authorized Event(s) <span className="text-[#E53C2E]">*</span>
+                    </label>
+                    <p className="text-[11px] text-[#7B6E65]">
+                      Select which specific event(s) this user can access (unselected events remain hidden):
+                    </p>
+                    <div className="space-y-1.5 max-h-40 overflow-y-auto pt-1">
+                      {events.map((ev) => {
+                        const checked = newUserEventIds.includes(ev.id);
+                        return (
+                          <label
+                            key={ev.id}
+                            className={`flex items-center gap-2.5 p-2 rounded-lg border cursor-pointer text-xs transition ${
+                              checked
+                                ? 'bg-white border-[#016836] text-[#26211E] font-semibold'
+                                : 'bg-white/60 border-[#E3DBD3] text-[#7B6E65]'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleNewUserEvent(ev.id)}
+                              className="rounded border-[#B6ADA4] text-[#016836] focus:ring-[#016836]"
+                            />
+                            <span className="truncate">{ev.name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-xl bg-[#EDF6F1] border border-[#016836]/25 text-[11px] font-semibold text-[#016836]">
+                    Control Dashboard Admins automatically have full access to all events.
+                  </div>
+                )}
+
                 <button
                   type="submit"
                   className="w-full py-2.5 rounded-xl text-sm font-bold bg-[#016836] hover:bg-[#01522B] text-white shadow-sm transition"
@@ -1384,70 +1454,119 @@ export const ControlDashboardPage: React.FC = () => {
                   return (
                     <div
                       key={u.id}
-                      className="p-3.5 rounded-xl bg-[#F7F4F2] border border-[#E3DBD3] flex flex-wrap items-center justify-between gap-3"
+                      className="p-3.5 rounded-xl bg-[#F7F4F2] border border-[#E3DBD3] space-y-2.5"
                     >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-bold text-[#26211E]">{u.fullName || u.email}</span>
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                              u.role === 'control'
-                                ? 'bg-[#DFF0D8] text-[#016836] border-[#016836]/25'
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-bold text-[#26211E]">{u.fullName || u.email}</span>
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                u.role === 'control'
+                                  ? 'bg-[#DFF0D8] text-[#016836] border-[#016836]/25'
+                                  : u.role === 'regular'
+                                  ? 'bg-[#E6F4FA] text-[#0080BB] border-[#0080BB]/25'
+                                  : 'bg-[#FCF8E3] text-[#8A6D3B] border-[#8A6D3B]/30'
+                              }`}
+                            >
+                              {u.role === 'control'
+                                ? 'Control Admin'
                                 : u.role === 'regular'
-                                ? 'bg-[#E6F4FA] text-[#0080BB] border-[#0080BB]/25'
-                                : 'bg-[#FCF8E3] text-[#8A6D3B] border-[#8A6D3B]/30'
-                            }`}
-                          >
-                            {u.role === 'control'
-                              ? 'Control Admin'
-                              : u.role === 'regular'
-                              ? 'Tier 1: School Dashboard'
-                              : 'Tier 2: Gate Control'}
-                          </span>
-                          {!u.active && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#F2DEDE] text-[#E53C2E]">
-                              Disabled
+                                ? 'Tier 1: School Dashboard'
+                                : 'Tier 2: Gate Control'}
                             </span>
+                            {!u.active && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#F2DEDE] text-[#E53C2E]">
+                                Disabled
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs font-mono text-[#7B6E65] mt-0.5">{u.email}</p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={u.role}
+                            disabled={isSelf}
+                            onChange={(e) => {
+                              const nextRole = e.target.value as UserRole;
+                              updateAuthorizedUser(u.id, {
+                                role: nextRole,
+                                allowedEventIds:
+                                  nextRole === 'control'
+                                    ? []
+                                    : u.allowedEventIds.length > 0
+                                    ? u.allowedEventIds
+                                    : [activeEvent.id],
+                              });
+                            }}
+                            className="px-2.5 py-1.5 rounded-lg bg-white border border-[#B6ADA4] text-xs text-[#26211E] disabled:opacity-50"
+                          >
+                            <option value="regular">Tier 1: School Dashboard</option>
+                            <option value="gate">Tier 2: Gate Control</option>
+                            <option value="control">Control Admin</option>
+                          </select>
+
+                          {!isSelf && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => updateAuthorizedUser(u.id, { active: !u.active })}
+                                className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white hover:bg-[#E3DBD3]/60 text-[#26211E] border border-[#E3DBD3]"
+                              >
+                                {u.active ? 'Disable' : 'Enable'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  removeAuthorizedUser(u.id);
+                                  showToast(`Removed ${u.email}`, 'info');
+                                }}
+                                className="p-1.5 rounded-lg text-[#E53C2E] hover:bg-[#F2DEDE] transition"
+                                title="Revoke User"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
                           )}
                         </div>
-                        <p className="text-xs font-mono text-[#7B6E65] mt-0.5">{u.email}</p>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <select
-                          value={u.role}
-                          disabled={isSelf}
-                          onChange={(e) =>
-                            updateAuthorizedUser(u.id, { role: e.target.value as UserRole })
-                          }
-                          className="px-2.5 py-1.5 rounded-lg bg-white border border-[#B6ADA4] text-xs text-[#26211E] disabled:opacity-50"
-                        >
-                          <option value="regular">Tier 1: School Dashboard</option>
-                          <option value="gate">Tier 2: Gate Control</option>
-                          <option value="control">Control Admin</option>
-                        </select>
-
-                        {!isSelf && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => updateAuthorizedUser(u.id, { active: !u.active })}
-                              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white hover:bg-[#E3DBD3]/60 text-[#26211E] border border-[#E3DBD3]"
-                            >
-                              {u.active ? 'Disable' : 'Enable'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                removeAuthorizedUser(u.id);
-                                showToast(`Removed ${u.email}`, 'info');
-                              }}
-                              className="p-1.5 rounded-lg text-[#E53C2E] hover:bg-[#F2DEDE] transition"
-                              title="Revoke User"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </>
+                      {/* Event Scope Assignment Bar for School Dashboard & Gate Control Users */}
+                      <div className="pt-2 border-t border-[#E3DBD3]/80 flex flex-wrap items-center gap-1.5">
+                        <span className="text-[11px] font-bold text-[#7B6E65] mr-1">
+                          Authorized Events:
+                        </span>
+                        {u.role === 'control' ? (
+                          <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-[#DFF0D8] text-[#016836] border border-[#016836]/25">
+                            All Events (Control Admin)
+                          </span>
+                        ) : (
+                          events.map((ev) => {
+                            const assigned = (u.allowedEventIds || []).includes(ev.id);
+                            return (
+                              <button
+                                key={ev.id}
+                                type="button"
+                                onClick={() =>
+                                  toggleExistingUserEvent(u.id, u.allowedEventIds || [], ev.id)
+                                }
+                                className={`px-2.5 py-0.5 rounded-md text-[11px] font-semibold border transition flex items-center gap-1 ${
+                                  assigned
+                                    ? 'bg-[#016836] text-white border-[#016836]'
+                                    : 'bg-white text-[#7B6E65] border-[#E3DBD3] hover:border-[#016836]'
+                                }`}
+                                title={
+                                  assigned
+                                    ? `Click to revoke access to ${ev.name}`
+                                    : `Click to grant access to ${ev.name}`
+                                }
+                              >
+                                {assigned && <Check className="w-3 h-3" />}
+                                <span>{ev.name}</span>
+                              </button>
+                            );
+                          })
                         )}
                       </div>
                     </div>

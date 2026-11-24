@@ -57,18 +57,24 @@ export const TopBar: React.FC = () => {
             <div className="flex items-center gap-2 flex-wrap">
               <div className="inline-flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5 text-[#016836] shrink-0" />
-                <select
-                  aria-label="Select Event"
-                  value={activeEvent.id}
-                  onChange={(e) => setActiveEventId(e.target.value)}
-                  className="text-xs sm:text-sm font-bold text-[#26211E] bg-[#F7F4F2] border border-[#E3DBD3] rounded-lg px-2.5 py-1 focus:outline-none focus:border-[#016836] max-w-[230px] sm:max-w-[300px] truncate cursor-pointer"
-                >
-                  {events.map((ev) => (
-                    <option key={ev.id} value={ev.id}>
-                      {ev.name}
-                    </option>
-                  ))}
-                </select>
+                {events.length === 0 ? (
+                  <span className="text-xs font-semibold text-[#8A6D3B] bg-[#FCF8E3] border border-[#8A6D3B]/30 rounded-lg px-2.5 py-1">
+                    No Events Assigned
+                  </span>
+                ) : (
+                  <select
+                    aria-label="Select Event"
+                    value={activeEvent.id}
+                    onChange={(e) => setActiveEventId(e.target.value)}
+                    className="text-xs sm:text-sm font-bold text-[#26211E] bg-[#F7F4F2] border border-[#E3DBD3] rounded-lg px-2.5 py-1 focus:outline-none focus:border-[#016836] max-w-[230px] sm:max-w-[300px] truncate cursor-pointer"
+                  >
+                    {events.map((ev) => (
+                      <option key={ev.id} value={ev.id}>
+                        {ev.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
               <span
                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${

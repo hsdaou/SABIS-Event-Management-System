@@ -1,15 +1,19 @@
 import React, { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
+  AlertCircle,
   Calendar,
   CheckCircle2,
   Download,
+  Edit3,
   Mail,
   MailCheck,
   MapPin,
   Phone,
   Printer,
   RefreshCw,
+  Search,
+  X,
 } from 'lucide-react';
 import { QrCodeImage } from '../components/QrCodeImage';
 import { SchoolSelectorField } from '../components/SchoolSelectorField';
@@ -18,7 +22,14 @@ import { buildPassQrPayload, downloadPassPng, getSchoolDisplay } from '../lib/qr
 import type { OtherAttendeeDetail, Registration } from '../types';
 
 export const InvitationPage: React.FC = () => {
-  const { getEventBySlugOrId, getVenuesForEvent, createRegistration, showToast } = useEvent();
+  const {
+    getEventBySlugOrId,
+    getVenuesForEvent,
+    findExistingRegistration,
+    createRegistration,
+    updateExistingRegistration,
+    showToast,
+  } = useEvent();
   const [searchParams] = useSearchParams();
 
   const eventParam = searchParams.get('event');
@@ -51,7 +62,6 @@ export const InvitationPage: React.FC = () => {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  // String-backed numeric input so mobile & desktop users can freely delete/clear and type any number
   const [numAttendeesInput, setNumAttendeesInput] = useState('1');
   const [schoolType, setSchoolType] = useState<'sabis_isc' | 'other' | ''>('');
   const [schoolBranch, setSchoolBranch] = useState('');
@@ -59,9 +69,17 @@ export const InvitationPage: React.FC = () => {
   const [attendeeAges, setAttendeeAges] = useState<string[]>(['']);
   const [otherAttendees, setOtherAttendees] = useState<OtherAttendeeDetail[]>([]);
 
+  // Duplicate prevention & Edit Previous Registration state
+  const [showEditLookup, setShowEditLookup] = useState(false);
+  const [lookupInput, setLookupInput] = useState('');
+  const [lookupBusy, setLookupBusy] = useState(false);
+  const [duplicateMatch, setDuplicateMatch] = useState<Registration | null>(null);
+  const [editingReg, setEditingReg] = useState<Registration | null>(null);
+
   const [submitting, setSubmitting] = useState(false);
   const [completedReg, setCompletedReg] = useState<Registration | null>(null);
   const [dispatchInfo, setDispatchInfo] = useState<string>('');
+  const [wasEdited, setWasEdited] = useState(false);
 
   const parsedAttendees = parseInt(numAttendeesInput, 10);
   const effectivePartySize = toggles.numAttendees
@@ -71,7 +89,6 @@ export const InvitationPage: React.FC = () => {
     : 1;
 
   const handleAttendeesInputChange = (raw: string) => {
-    // Allow clearing the input completely and typing digits cleanly on phones & desktop
     const digitsOnly = raw.replace(/\D/g, '').slice(0, 2);
     if (digitsOnly === '') {
       setNumAttendeesInput('');
@@ -94,8 +111,57 @@ export const InvitationPage: React.FC = () => {
     );
   };
 
+  const loadRegistrationIntoEditForm = (reg: Registration) => {
+    const size = Math.max(1, reg.partySize || reg.passes.length || 1);
+    setEditingReg(reg);
+    setDuplicateMatch(null);
+    setCompletedReg(null);
+    setShowEditLookup(false);
+    setParentNumber(reg.parentNumber || '');
+    setFullName(reg.name || '');
+    setEmail(reg.email || '');
+    setPhone(reg.phone || '');
+    setNumAttendeesInput(String(size));
+    setSchoolType(reg.schoolType || '');
+    setSchoolBranch(reg.schoolBranch || '');
+    setSchoolOther(reg.schoolOther || '');
+    setAttendeeAges(Array.from({ length: size }, (_, i) => reg.attendeeAges?.[i] || reg.passes?.[i]?.attendeeAge || ''));
+    setOtherAttendees(
+      Array.from({ length: Math.max(0, size - 1) }, (_, i) => ({
+        name: reg.otherAttendees?.[i]?.name || reg.passes?.[i + 1]?.attendeeLabel || '',
+        contact: reg.otherAttendees?.[i]?.contact || reg.passes?.[i + 1]?.attendeeContact || '',
+      }))
+    );
+    showToast(`Loaded registration ${reg.id} for editing`, 'info');
+  };
+
+  const handleFindExisting = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const val = lookupInput.trim();
+    if (!val) {
+      showToast('Enter your Parent Number, registered Email, or Phone Number.', 'warning');
+      return;
+    }
+    setLookupBusy(true);
+    try {
+      const found = await findExistingRegistration(targetEvent.id, {
+        parentNumber: val.includes('@') ? '' : val,
+        email: val.includes('@') ? val : '',
+        phone: val,
+      });
+      if (!found) {
+        showToast('No previous registration found for this event with those details.', 'warning');
+        return;
+      }
+      loadRegistrationIntoEditForm(found);
+    } finally {
+      setLookupBusy(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setDuplicateMatch(null);
 
     if (toggles.parentNumber && requiredFields.parentNumber && !parentNumber.trim()) {
       showToast('Parent Number is required.', 'warning');
@@ -162,30 +228,71 @@ export const InvitationPage: React.FC = () => {
       return;
     }
 
+    const payload = {
+      eventId: targetEvent.id,
+      parentNumber: toggles.parentNumber ? parentNumber : editingReg?.parentNumber || '',
+      name: toggles.fullName
+        ? fullName
+        : editingReg?.name || parentNumber || email || phone || 'Event Guest',
+      phone: toggles.phone ? phone : editingReg?.phone || '',
+      email: toggles.email ? email : editingReg?.email || '',
+      schoolType: toggles.school ? schoolType : editingReg?.schoolType || '',
+      schoolBranch: toggles.school ? schoolBranch : editingReg?.schoolBranch || '',
+      schoolOther: toggles.school ? schoolOther : editingReg?.schoolOther || '',
+      category: editingReg ? editingReg.category : ((isVip ? 'VIP' : 'Parent') as 'VIP' | 'Parent'),
+      assignedGate: editingReg?.assignedGate || activeVenue?.name || 'Gate A - Main Campus Entrance',
+      partySize: effectivePartySize,
+      attendeeAges: toggles.attendeeAges ? attendeeAges.slice(0, effectivePartySize) : [],
+      otherAttendees: toggles.otherAttendeeContacts
+        ? otherAttendees.slice(0, Math.max(0, effectivePartySize - 1))
+        : [],
+      notes: editingReg
+        ? `Updated registration via ${activeVenue?.name || 'Venue'} invitation link`
+        : `Registered via ${activeVenue?.name || 'Venue'} (${isVip ? 'VIP' : 'Parent'}) invitation link`,
+      fromInvitationPage: true,
+    };
+
     setSubmitting(true);
     try {
-      const { registration, dispatchMessage } = await createRegistration({
-        eventId: targetEvent.id,
-        parentNumber: toggles.parentNumber ? parentNumber : '',
-        name: toggles.fullName ? fullName : parentNumber || email || phone || 'Event Guest',
-        phone: toggles.phone ? phone : '',
-        email: toggles.email ? email : '',
-        schoolType: toggles.school ? schoolType : '',
-        schoolBranch: toggles.school ? schoolBranch : '',
-        schoolOther: toggles.school ? schoolOther : '',
-        category: isVip ? 'VIP' : 'Parent',
-        assignedGate: activeVenue?.name || 'Gate A - Main Campus Entrance',
-        partySize: effectivePartySize,
-        attendeeAges: toggles.attendeeAges ? attendeeAges.slice(0, effectivePartySize) : [],
-        otherAttendees: toggles.otherAttendeeContacts
-          ? otherAttendees.slice(0, Math.max(0, effectivePartySize - 1))
-          : [],
-        notes: `Registered via ${activeVenue?.name || 'Venue'} (${isVip ? 'VIP' : 'Parent'}) invitation link`,
-        fromInvitationPage: true,
-      });
+      // Edit existing registration flow
+      if (editingReg) {
+        const res = await updateExistingRegistration(editingReg.id, payload);
+        if (!res.ok || !res.registration) {
+          showToast(res.error || 'Could not update your registration.', 'error');
+          return;
+        }
+        setCompletedReg(res.registration);
+        setDispatchInfo(res.dispatchMessage || '');
+        setWasEdited(true);
+        setEditingReg(null);
+        showToast(
+          res.registration.deliveryMode === 'contact_info'
+            ? res.registration.deliveryStatus === 'sent'
+              ? `Registration updated & ${res.registration.passes.length} QR pass(es) resent to ${res.registration.email}!`
+              : res.dispatchMessage || 'Registration updated.'
+            : `Registration updated! Your ${res.registration.passes.length} SABIS® QR pass(es) are ready.`,
+          'success'
+        );
+        return;
+      }
+
+      // New registration flow (automatically checks & blocks duplicates!)
+      const { registration, duplicate, dispatchMessage } = await createRegistration(payload);
+
+      if (duplicate) {
+        setDuplicateMatch(duplicate);
+        showToast(
+          'You have already registered for this event. You can edit your existing registration below.',
+          'warning'
+        );
+        return;
+      }
+
+      if (!registration) return;
 
       setCompletedReg(registration);
       setDispatchInfo(dispatchMessage || '');
+      setWasEdited(false);
       showToast(
         registration.deliveryMode === 'contact_info'
           ? registration.deliveryStatus === 'sent'
@@ -203,7 +310,10 @@ export const InvitationPage: React.FC = () => {
 
   const resetForm = () => {
     setCompletedReg(null);
+    setEditingReg(null);
+    setDuplicateMatch(null);
     setDispatchInfo('');
+    setWasEdited(false);
     setParentNumber('');
     setFullName('');
     setEmail('');
@@ -255,13 +365,99 @@ export const InvitationPage: React.FC = () => {
           </p>
         </div>
 
-        {/* STEP 1: Dynamic Invitation Registration Form */}
+        {/* STEP 1: Dynamic Invitation Registration Form (with Duplicate Protection & Edit Mode) */}
         {!completedReg ? (
           <div
-            className={`glass-panel rounded-2xl p-6 sm:p-7 border-t-4 ${
+            className={`glass-panel rounded-2xl p-6 sm:p-7 border-t-4 space-y-5 ${
               isVip ? 'border-t-[#8A6D3B]' : 'border-t-[#016836]'
             }`}
           >
+            {/* Already Registered? Lookup & Edit Bar */}
+            {!editingReg ? (
+              <div className="p-3.5 rounded-xl bg-[#F7F4F2] border border-[#E3DBD3] space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-[#26211E] flex items-center gap-1.5">
+                    <Edit3 className="w-3.5 h-3.5 text-[#016836]" />
+                    <span>Already registered for this event?</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowEditLookup((v) => !v)}
+                    className="text-xs font-bold text-[#016836] hover:underline"
+                  >
+                    {showEditLookup ? 'Hide Lookup' : 'Edit My Registration'}
+                  </button>
+                </div>
+
+                {showEditLookup && (
+                  <form onSubmit={handleFindExisting} className="flex flex-col sm:flex-row gap-2 pt-1">
+                    <div className="relative flex-1">
+                      <Search className="w-3.5 h-3.5 text-[#7B6E65] absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={lookupInput}
+                        onChange={(e) => setLookupInput(e.target.value)}
+                        placeholder="Enter Parent #, Email, or Phone Number..."
+                        className="w-full pl-8 pr-3 py-2 rounded-lg bg-white border border-[#B6ADA4] text-xs text-[#26211E] placeholder-[#7B6E65]/70 focus:outline-none focus:border-[#016836]"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={lookupBusy}
+                      className="px-3.5 py-2 rounded-lg text-xs font-bold bg-[#016836] hover:bg-[#01522B] text-white shrink-0 transition disabled:opacity-50"
+                    >
+                      {lookupBusy ? 'Searching...' : 'Find & Edit'}
+                    </button>
+                  </form>
+                )}
+              </div>
+            ) : (
+              <div className="p-3.5 rounded-xl bg-[#EDF6F1] border border-[#016836]/35 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-xs font-bold text-[#016836] flex items-center gap-1.5">
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>Editing Existing Registration ({editingReg.id})</span>
+                  </p>
+                  <p className="text-[11px] text-[#7B6E65] mt-0.5">
+                    Update your details or attendee count below — existing scanned passes remain preserved.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white border border-[#E3DBD3] text-[#7B6E65] hover:text-[#26211E] flex items-center gap-1"
+                >
+                  <X className="w-3 h-3" /> Cancel
+                </button>
+              </div>
+            )}
+
+            {/* Duplicate Registration Blocked Banner */}
+            {duplicateMatch && !editingReg && (
+              <div className="p-4 rounded-xl bg-[#FCF8E3] border border-[#8A6D3B]/45 space-y-2.5">
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-[#8A6D3B] shrink-0 mt-0.5" />
+                  <div className="text-xs text-[#26211E] space-y-1">
+                    <p className="font-bold text-[#8A6D3B]">
+                      Duplicate Registration Not Allowed
+                    </p>
+                    <p>
+                      A registration already exists for <strong>{duplicateMatch.name}</strong> (
+                      <span className="font-mono">{duplicateMatch.id}</span>) on this event. You cannot register more than once, but you can edit your previous registration.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => loadRegistrationIntoEditForm(duplicateMatch)}
+                  className="w-full py-2 rounded-lg text-xs font-bold bg-[#8A6D3B] hover:bg-[#70572E] text-white flex items-center justify-center gap-1.5 transition"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Load &amp; Edit My Previous Registration</span>
+                </button>
+              </div>
+            )}
+
             {!anyFieldVisible ? (
               <div className="py-6 text-center text-xs text-[#7B6E65]">
                 Registration fields are currently hidden by the event administrator.
@@ -310,7 +506,6 @@ export const InvitationPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* Separate Phone Number Field */}
                 {toggles.phone && (
                   <div>
                     <label className="flex items-center justify-between text-xs font-bold text-[#26211E] mb-1.5">
@@ -335,7 +530,6 @@ export const InvitationPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* Separate Email Field */}
                 {toggles.email && (
                   <div>
                     <label className="flex items-center justify-between text-xs font-bold text-[#26211E] mb-1.5">
@@ -372,7 +566,6 @@ export const InvitationPage: React.FC = () => {
                   />
                 )}
 
-                {/* Mobile-friendly plain numeric typing for Number of Attendees */}
                 {toggles.numAttendees && (
                   <div>
                     <label className="flex items-center justify-between text-xs font-bold text-[#26211E] mb-1.5">
@@ -507,7 +700,13 @@ export const InvitationPage: React.FC = () => {
                     }`}
                   >
                     {submitting
-                      ? 'Processing Registration...'
+                      ? editingReg
+                        ? 'Saving Changes...'
+                        : 'Processing Registration...'
+                      : editingReg
+                      ? `Save Changes & Update ${effectivePartySize} QR ${
+                          effectivePartySize === 1 ? 'Pass' : 'Passes'
+                        }`
                       : targetEvent.qrDeliveryMode === 'contact_info'
                       ? `Complete Registration & Send ${effectivePartySize} QR ${
                           effectivePartySize === 1 ? 'Code' : 'Codes'
@@ -535,7 +734,11 @@ export const InvitationPage: React.FC = () => {
                 }`}
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                {completedReg.deliveryStatus === 'sent'
+                {wasEdited
+                  ? completedReg.deliveryStatus === 'sent'
+                    ? 'Registration Updated & Emailed'
+                    : 'Registration Updated — Email Queued'
+                  : completedReg.deliveryStatus === 'sent'
                   ? 'Registration Confirmed & Emailed'
                   : 'Registration Saved — Email Queued'}
               </span>
@@ -602,21 +805,32 @@ export const InvitationPage: React.FC = () => {
               <p className="text-[11px] text-[#7B6E65] max-w-md mx-auto">{dispatchInfo}</p>
             )}
 
-            <button
-              type="button"
-              onClick={resetForm}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-[#26211E] bg-[#F7F4F2] hover:bg-[#E3DBD3]/60 border border-[#E3DBD3] transition"
-            >
-              <RefreshCw className="w-3.5 h-3.5 text-[#016836]" />
-              <span>Register Another Guest</span>
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => loadRegistrationIntoEditForm(completedReg)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-[#016836] hover:bg-[#01522B] text-white transition"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>Edit My Registration</span>
+              </button>
+              <button
+                type="button"
+                onClick={resetForm}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-[#26211E] bg-[#F7F4F2] hover:bg-[#E3DBD3]/60 border border-[#E3DBD3] transition"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-[#016836]" />
+                <span>Done</span>
+              </button>
+            </div>
           </div>
         ) : (
           /* STEP 2B: Multi-QR SABIS®-Branded Passes Generated Immediately On Screen */
           <div className="glass-panel rounded-2xl p-6 border-t-4 border-t-[#016836] space-y-5">
             <div className="text-center space-y-1">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#DFF0D8] text-[#016836] border border-[#016836]/25">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Registration Confirmed
+                <CheckCircle2 className="w-3.5 h-3.5" />{' '}
+                {wasEdited ? 'Registration Updated' : 'Registration Confirmed'}
               </span>
               <h2 className="text-lg font-bold text-[#26211E] pt-1">
                 Your {completedReg.passes.length} SABIS® Event Entry QR{' '}
@@ -715,6 +929,14 @@ export const InvitationPage: React.FC = () => {
             <div className="flex flex-wrap items-center justify-center gap-2.5 print:hidden">
               <button
                 type="button"
+                onClick={() => loadRegistrationIntoEditForm(completedReg)}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold bg-[#016836] hover:bg-[#01522B] text-white flex items-center gap-1.5 transition"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>Edit My Registration</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => window.print()}
                 className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-white hover:bg-[#F7F4F2] text-[#26211E] border border-[#E3DBD3] flex items-center gap-1.5 transition"
               >
@@ -724,9 +946,9 @@ export const InvitationPage: React.FC = () => {
               <button
                 type="button"
                 onClick={resetForm}
-                className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#016836] hover:bg-[#EDF6F1] transition"
+                className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#7B6E65] hover:text-[#26211E] transition"
               >
-                &larr; Register Another Parent
+                Done
               </button>
             </div>
           </div>

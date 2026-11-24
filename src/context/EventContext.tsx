@@ -78,7 +78,9 @@ interface EventContextValue {
   isLiveSupabase: boolean;
 
   // Multi-event state
-  events: EventItem[];
+  allEvents: EventItem[];
+  events: EventItem[]; // Scoped to session.allowedEventIds for School Dashboard & Gate Control users
+  hasAssignedEvents: boolean;
   activeEventId: string;
   activeEvent: EventItem;
   setActiveEventId: (eventId: string) => void;
@@ -116,22 +118,35 @@ interface EventContextValue {
   updateRequiredField: (key: keyof RequiredFields, value: boolean) => Promise<void>;
   saveVenues: (nextVenues: Venue[]) => Promise<void>;
 
-  // Control Admin user management
+  // Control Admin user management (with event-specific authorization)
   addAuthorizedUser: (
     email: string,
     fullName: string,
-    role: UserRole
+    role: UserRole,
+    allowedEventIds?: string[]
   ) => Promise<{ ok: boolean; error?: string }>;
   updateAuthorizedUser: (
     id: string,
-    patch: Partial<Pick<AuthorizedUser, 'role' | 'active' | 'fullName'>>
+    patch: Partial<Pick<AuthorizedUser, 'role' | 'active' | 'fullName' | 'allowedEventIds'>>
   ) => Promise<void>;
   removeAuthorizedUser: (id: string) => Promise<void>;
 
-  // Registrations & passes
+  // Registrations & passes (with duplicate detection + editing)
+  findExistingRegistration: (
+    eventId: string,
+    lookup: { parentNumber?: string; email?: string; phone?: string }
+  ) => Promise<Registration | null>;
   createRegistration: (
     input: CreateRegistrationInput
-  ) => Promise<{ registration: Registration; dispatchMessage?: string }>;
+  ) => Promise<{
+    registration?: Registration;
+    duplicate?: Registration;
+    dispatchMessage?: string;
+  }>;
+  updateExistingRegistration: (
+    registrationId: string,
+    input: CreateRegistrationInput
+  ) => Promise<{ ok: boolean; registration?: Registration; dispatchMessage?: string; error?: string }>;
   importCsvRegistrations: (
     venueName: string,
     tier: 'VIP' | 'Parent',
@@ -204,7 +219,14 @@ function loadLocalState(): LocalStoredState {
             : DEFAULT_VENUES,
         authorizedUsers:
           Array.isArray(parsed.authorizedUsers) && parsed.authorizedUsers.length > 0
-            ? parsed.authorizedUsers
+            ? parsed.authorizedUsers.map((u) => ({
+                ...u,
+                allowedEventIds: Array.isArray(u.allowedEventIds)
+                  ? u.allowedEventIds
+                  : u.role === 'control'
+                  ? []
+                  : events.map((e) => e.id),
+              }))
             : DEFAULT_AUTHORIZED_USERS,
       registrations: Array.isArray(parsed.registrations)
           ? parsed.registrations.map((r) => ({
@@ -250,11 +272,72 @@ function saveLocalState(state: LocalStoredState) {
 function loadLocalSession(): AuthSession | null {
   try {
     const raw = localStorage.getItem(LOCAL_SESSION_KEY);
-    if (raw) return JSON.parse(raw) as AuthSession;
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<AuthSession>;
+      if (parsed.email && parsed.role) {
+        return {
+          email: parsed.email,
+          fullName: parsed.fullName || parsed.email,
+          role: parsed.role,
+          allowedEventIds: Array.isArray(parsed.allowedEventIds) ? parsed.allowedEventIds : [],
+          isSupabaseAuth: Boolean(parsed.isSupabaseAuth),
+        };
+      }
+    }
   } catch {
     // ignore
   }
   return null;
+}
+
+function normalizePhoneDigits(phone?: string): string {
+  return String(phone || '').replace(/\D/g, '');
+}
+
+function hydrateRegistrationFromRpc(
+  regRow: Record<string, unknown>,
+  passRows: Array<Record<string, unknown>>
+): Registration {
+  const regIdStr = String(regRow.id);
+  const eventIdStr = String(regRow.event_id || DEFAULT_EVENT_ID);
+  const passes: AttendeePass[] = (passRows || []).map((p) => ({
+    passCode: String(p.pass_code),
+    eventId: String(p.event_id || eventIdStr),
+    registrationId: String(p.registration_id || regIdStr),
+    passIndex: Number(p.pass_index) || 1,
+    totalPasses: Number(p.total_passes) || 1,
+    attendeeLabel: String(p.attendee_label || ''),
+    attendeeAge: String(p.attendee_age || ''),
+    attendeeContact: String(p.attendee_contact || ''),
+    status: p.status === 'USED' ? 'USED' : 'PENDING',
+    usedAt: p.used_at ? String(p.used_at) : null,
+    usedGate: p.used_gate ? String(p.used_gate) : null,
+    scannedBy: p.scanned_by ? String(p.scanned_by) : null,
+  }));
+
+  return {
+    id: regIdStr,
+    eventId: eventIdStr,
+    parentNumber: String(regRow.parent_number || ''),
+    name: String(regRow.name || ''),
+    phone: String(regRow.phone || ''),
+    email: String(regRow.email || ''),
+    schoolType: (regRow.school_type || '') as Registration['schoolType'],
+    schoolBranch: String(regRow.school_branch || ''),
+    schoolOther: String(regRow.school_other || ''),
+    category: regRow.category === 'VIP' ? 'VIP' : 'Parent',
+    assignedGate: String(regRow.assigned_gate || ''),
+    partySize: Number(regRow.party_size) || 1,
+    attendeeAges: Array.isArray(regRow.attendee_ages) ? (regRow.attendee_ages as string[]) : [],
+    otherAttendees: Array.isArray(regRow.other_attendees)
+      ? (regRow.other_attendees as OtherAttendeeDetail[])
+      : [],
+    notes: String(regRow.notes || ''),
+    deliveryMode: regRow.delivery_mode === 'contact_info' ? 'contact_info' : 'on_screen',
+    deliveryStatus: (regRow.delivery_status || 'displayed') as Registration['deliveryStatus'],
+    registeredAt: String(regRow.registered_at || new Date().toISOString()),
+    passes,
+  };
 }
 
 export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -281,17 +364,41 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, 3600);
   }, []);
 
+  // Scoped events: Control Admins & unauthenticated public invitation pages see all events;
+  // School Dashboard ('regular') & Gate Control ('gate') ONLY see their specifically assigned events!
+  const visibleEvents = useMemo<EventItem[]>(() => {
+    if (!session || session.role === 'control') return events;
+    const allowedSet = new Set(session.allowedEventIds || []);
+    return events.filter((e) => allowedSet.has(e.id));
+  }, [events, session]);
+
+  const hasAssignedEvents = useMemo<boolean>(() => {
+    if (!session || session.role === 'control') return true;
+    return visibleEvents.length > 0;
+  }, [session, visibleEvents.length]);
+
   const activeEvent = useMemo<EventItem>(() => {
-    return events.find((e) => e.id === activeEventId) || events[0] || DEFAULT_EVENTS[0];
-  }, [activeEventId, events]);
+    const pool = !session || session.role === 'control' ? events : visibleEvents;
+    return pool.find((e) => e.id === activeEventId) || pool[0] || events[0] || DEFAULT_EVENTS[0];
+  }, [activeEventId, events, session, visibleEvents]);
+
+  // Keep activeEventId synced within visibleEvents when switching roles or updating permissions
+  useEffect(() => {
+    if (session && session.role !== 'control' && visibleEvents.length > 0) {
+      if (!visibleEvents.some((e) => e.id === activeEventId)) {
+        setActiveEventIdState(visibleEvents[0].id);
+      }
+    }
+  }, [activeEventId, session, visibleEvents]);
 
   const setActiveEventId = useCallback(
     (id: string) => {
-      if (events.some((e) => e.id === id)) {
+      const pool = !session || session.role === 'control' ? events : visibleEvents;
+      if (pool.some((e) => e.id === id)) {
         setActiveEventIdState(id);
       }
     },
-    [events]
+    [events, session, visibleEvents]
   );
 
   const getEventBySlugOrId = useCallback(
@@ -457,6 +564,9 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             fullName: u.full_name || '',
             role: u.role as UserRole,
             active: Boolean(u.active),
+            allowedEventIds: Array.isArray(u.allowed_event_ids)
+              ? (u.allowed_event_ids as string[])
+              : [],
             addedBy: u.added_by || '',
             createdAt: u.created_at,
           }))
@@ -556,6 +666,9 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         email: authRow.email,
         fullName: authRow.full_name || authRow.email,
         role: authRow.role as UserRole,
+        allowedEventIds: Array.isArray(authRow.allowed_event_ids)
+          ? (authRow.allowed_event_ids as string[])
+          : [],
         isSupabaseAuth: true,
       });
     } else if (defaultControlEmail && userEmail === defaultControlEmail) {
@@ -563,6 +676,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         email: userEmail,
         fullName: 'SABIS Control Admin',
         role: 'control',
+        allowedEventIds: [],
         isSupabaseAuth: true,
       });
     } else {
@@ -644,6 +758,9 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           email,
           fullName: authRow?.full_name || email,
           role: resolvedRole,
+          allowedEventIds: Array.isArray(authRow?.allowed_event_ids)
+            ? (authRow.allowed_event_ids as string[])
+            : [],
           isSupabaseAuth: true,
         };
         setSession(nextSession);
@@ -665,6 +782,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         email: matched.email,
         fullName: matched.fullName || matched.email,
         role: matched.role,
+        allowedEventIds: matched.allowedEventIds || [],
         isSupabaseAuth: false,
       };
       setSession(nextSession);
@@ -912,7 +1030,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // ==================== AUTHORIZED USERS ====================
   const addAuthorizedUser = useCallback(
-    async (emailRaw: string, fullNameRaw: string, role: UserRole) => {
+    async (emailRaw: string, fullNameRaw: string, role: UserRole, allowedEventIdsInput?: string[]) => {
       const email = emailRaw.trim().toLowerCase();
       if (!email || !email.includes('@')) {
         return { ok: false, error: 'Enter a valid email address.' };
@@ -920,45 +1038,79 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (authorizedUsers.some((u) => u.email.toLowerCase() === email)) {
         return { ok: false, error: 'This email address is already registered.' };
       }
+      const allowedEventIds =
+        role === 'control'
+          ? []
+          : allowedEventIdsInput && allowedEventIdsInput.length > 0
+          ? allowedEventIdsInput
+          : [activeEvent.id];
+
       const newUser: AuthorizedUser = {
         id: `usr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         email,
         fullName: fullNameRaw.trim() || email.split('@')[0],
         role,
         active: true,
+        allowedEventIds,
         addedBy: session?.email || 'control',
         createdAt: new Date().toISOString(),
       };
       if (supabase) {
-        const { data, error } = await supabase
+        let { data, error } = await supabase
           .from('authorized_users')
           .insert({
             email: newUser.email,
             full_name: newUser.fullName,
             role: newUser.role,
             active: true,
+            allowed_event_ids: newUser.allowedEventIds,
             added_by: newUser.addedBy,
           })
           .select()
           .single();
+        if (error && error.message.toLowerCase().includes('allowed_event_ids')) {
+          const retry = await supabase
+            .from('authorized_users')
+            .insert({
+              email: newUser.email,
+              full_name: newUser.fullName,
+              role: newUser.role,
+              active: true,
+              added_by: newUser.addedBy,
+            })
+            .select()
+            .single();
+          data = retry.data;
+          error = retry.error;
+        }
         if (error) return { ok: false, error: error.message };
         if (data) newUser.id = data.id;
       }
       setAuthorizedUsers((prev) => [...prev, newUser]);
       return { ok: true };
     },
-    [authorizedUsers, session?.email]
+    [activeEvent.id, authorizedUsers, session?.email]
   );
 
   const updateAuthorizedUser = useCallback(
-    async (id: string, patch: Partial<Pick<AuthorizedUser, 'role' | 'active' | 'fullName'>>) => {
+    async (
+      id: string,
+      patch: Partial<Pick<AuthorizedUser, 'role' | 'active' | 'fullName' | 'allowedEventIds'>>
+    ) => {
       setAuthorizedUsers((prev) => prev.map((u) => (u.id === id ? { ...u, ...patch } : u)));
       if (supabase) {
         const payload: Record<string, unknown> = {};
         if (patch.role !== undefined) payload.role = patch.role;
         if (patch.active !== undefined) payload.active = patch.active;
         if (patch.fullName !== undefined) payload.full_name = patch.fullName;
-        await supabase.from('authorized_users').update(payload).eq('id', id);
+        if (patch.allowedEventIds !== undefined) payload.allowed_event_ids = patch.allowedEventIds;
+        const { error } = await supabase.from('authorized_users').update(payload).eq('id', id);
+        if (error && error.message.toLowerCase().includes('allowed_event_ids')) {
+          delete payload.allowed_event_ids;
+          if (Object.keys(payload).length > 0) {
+            await supabase.from('authorized_users').update(payload).eq('id', id);
+          }
+        }
       }
     },
     []
@@ -1036,12 +1188,77 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     [activeEvent, events]
   );
 
-  // ==================== REGISTRATIONS & MULTI-QR PASSES ====================
+  // ==================== REGISTRATIONS & MULTI-QR PASSES (DEDUP + EDIT) ====================
+  const findExistingRegistration = useCallback(
+    async (
+      eventId: string,
+      lookup: { parentNumber?: string; email?: string; phone?: string }
+    ): Promise<Registration | null> => {
+      const pNum = (lookup.parentNumber || '').trim().toUpperCase();
+      const email = (lookup.email || '').trim().toLowerCase();
+      const phoneDigits = normalizePhoneDigits(lookup.phone);
+
+      if (!pNum && !email && phoneDigits.length < 6) {
+        return null;
+      }
+
+      // 1. Live Supabase lookup via SECURITY DEFINER RPC (works even for unauthenticated public invitees!)
+      if (supabase) {
+        try {
+          const { data, error } = await supabase.rpc('lookup_existing_registration', {
+            p_event_id: eventId,
+            p_parent_number: pNum,
+            p_email: email,
+            p_phone: lookup.phone || '',
+          });
+          if (!error && data && data.registration) {
+            const hydrated = hydrateRegistrationFromRpc(
+              data.registration as Record<string, unknown>,
+              Array.isArray(data.passes) ? (data.passes as Array<Record<string, unknown>>) : []
+            );
+            setAllRegistrations((prev) =>
+              prev.some((r) => r.id === hydrated.id)
+                ? prev.map((r) => (r.id === hydrated.id ? hydrated : r))
+                : [hydrated, ...prev]
+            );
+            return hydrated;
+          }
+        } catch {
+          // fall through to local memory lookup
+        }
+      }
+
+      // 2. Local memory check (works in Preview Mode and when Supabase RPC isn't migrated yet)
+      const localFound = allRegistrations.find((r) => {
+        if (r.eventId !== eventId) return false;
+        if (pNum && r.parentNumber && r.parentNumber.trim().toUpperCase() === pNum) return true;
+        if (email && r.email && r.email.trim().toLowerCase() === email) return true;
+        if (phoneDigits.length >= 6 && normalizePhoneDigits(r.phone) === phoneDigits) return true;
+        return false;
+      });
+
+      return localFound || null;
+    },
+    [allRegistrations]
+  );
+
   const createRegistration = useCallback(
     async (input: CreateRegistrationInput) => {
       const targetEventId = input.eventId || activeEvent.id;
       const targetEvent = events.find((e) => e.id === targetEventId) || activeEvent;
       const targetVenues = getVenuesForEvent(targetEventId);
+
+      // Prevent duplicate registration for the same event (by Parent Number, Email, or Phone)
+      if (input.fromInvitationPage) {
+        const existing = await findExistingRegistration(targetEventId, {
+          parentNumber: input.parentNumber,
+          email: input.email,
+          phone: input.phone,
+        });
+        if (existing) {
+          return { duplicate: existing };
+        }
+      }
 
       setNextCounter((c) => c + 1);
       const regId = generateUniqueRegId();
@@ -1171,7 +1388,144 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       return { registration, dispatchMessage };
     },
-    [activeEvent, dispatchQrPasses, events, getVenuesForEvent, showToast]
+    [activeEvent, dispatchQrPasses, events, findExistingRegistration, getVenuesForEvent, showToast]
+  );
+
+  const updateExistingRegistration = useCallback(
+    async (
+      registrationId: string,
+      input: CreateRegistrationInput
+    ): Promise<{ ok: boolean; registration?: Registration; dispatchMessage?: string; error?: string }> => {
+      const targetEventId = input.eventId || activeEvent.id;
+      const targetEvent = events.find((e) => e.id === targetEventId) || activeEvent;
+      const existing = allRegistrations.find((r) => r.id === registrationId);
+      const partySize = Math.max(1, Math.min(20, Number(input.partySize) || 1));
+
+      if (existing) {
+        const usedCount = existing.passes.filter((p) => p.status === 'USED').length;
+        if (partySize < usedCount) {
+          return {
+            ok: false,
+            error: `Cannot reduce attendees below ${usedCount} already checked-in pass(es).`,
+          };
+        }
+      }
+
+      // Build updated passes array preserving existing USED status & timestamps
+      const existingByIdx = new Map<number, AttendeePass>();
+      (existing?.passes || []).forEach((p) => existingByIdx.set(p.passIndex, p));
+
+      const nextPasses: AttendeePass[] = Array.from({ length: partySize }, (_, idx) => {
+        const passIndex = idx + 1;
+        const prevPass = existingByIdx.get(passIndex);
+        const other = idx > 0 ? input.otherAttendees[idx - 1] : undefined;
+        const label =
+          idx === 0
+            ? input.name.trim() || existing?.name || 'Attendee 1'
+            : other?.name?.trim() || `${input.name.trim() || 'Guest'} — Attendee ${passIndex}`;
+        const contact =
+          idx === 0
+            ? input.phone.trim() || input.email.trim() || ''
+            : other?.contact?.trim() || '';
+        const age = (input.attendeeAges[idx] || '').trim();
+
+        return {
+          passCode: prevPass?.passCode || `${registrationId}-${passIndex}`,
+          eventId: targetEventId,
+          registrationId,
+          passIndex,
+          totalPasses: partySize,
+          attendeeLabel: label,
+          attendeeAge: age,
+          attendeeContact: contact,
+          status: prevPass?.status || 'PENDING',
+          usedAt: prevPass?.usedAt || null,
+          usedGate: prevPass?.usedGate || null,
+          scannedBy: prevPass?.scannedBy || null,
+        };
+      });
+
+      const isContactDelivery = Boolean(
+        input.fromInvitationPage && targetEvent.qrDeliveryMode === 'contact_info'
+      );
+
+      let updatedReg: Registration = {
+        id: registrationId,
+        eventId: targetEventId,
+        parentNumber: input.parentNumber.trim().toUpperCase(),
+        name: input.name.trim() || existing?.name || 'Registered Invitee',
+        phone: input.phone.trim(),
+        email: input.email.trim(),
+        schoolType: input.schoolType,
+        schoolBranch: input.schoolBranch,
+        schoolOther: input.schoolOther.trim(),
+        category: existing?.category || input.category,
+        assignedGate: existing?.assignedGate || input.assignedGate,
+        partySize,
+        attendeeAges: input.attendeeAges.slice(0, partySize),
+        otherAttendees: input.otherAttendees.slice(0, Math.max(0, partySize - 1)),
+        notes: input.notes?.trim() || existing?.notes || `${input.category} Registration`,
+        deliveryMode: isContactDelivery ? 'contact_info' : 'on_screen',
+        deliveryStatus: isContactDelivery ? 'sent' : 'displayed',
+        registeredAt: existing?.registeredAt || new Date().toISOString(),
+        passes: nextPasses,
+      };
+
+      if (supabase) {
+        const { data, error } = await supabase.rpc('update_existing_registration', {
+          p_registration_id: registrationId,
+          p_event_id: targetEventId,
+          p_payload: {
+            parent_number: updatedReg.parentNumber,
+            name: updatedReg.name,
+            phone: updatedReg.phone,
+            email: updatedReg.email,
+            school_type: updatedReg.schoolType,
+            school_branch: updatedReg.schoolBranch,
+            school_other: updatedReg.schoolOther,
+            party_size: updatedReg.partySize,
+            attendee_ages: updatedReg.attendeeAges,
+            other_attendees: updatedReg.otherAttendees,
+            notes: updatedReg.notes,
+            delivery_mode: updatedReg.deliveryMode,
+            delivery_status: updatedReg.deliveryStatus,
+          },
+          p_passes: nextPasses.map((p) => ({
+            pass_code: p.passCode,
+            pass_index: p.passIndex,
+            attendee_label: p.attendeeLabel,
+            attendee_age: p.attendeeAge,
+            attendee_contact: p.attendeeContact,
+          })),
+        });
+
+        if (error) {
+          return { ok: false, error: error.message };
+        }
+        if (data && data.registration) {
+          updatedReg = hydrateRegistrationFromRpc(
+            data.registration as Record<string, unknown>,
+            Array.isArray(data.passes) ? (data.passes as Array<Record<string, unknown>>) : []
+          );
+        }
+      }
+
+      let dispatchMessage: string | undefined;
+      if (isContactDelivery) {
+        const result = await dispatchQrPasses(updatedReg);
+        dispatchMessage = result.message;
+        updatedReg.deliveryStatus = result.ok ? 'sent' : 'queued';
+      }
+
+      setAllRegistrations((prev) =>
+        prev.some((r) => r.id === updatedReg.id)
+          ? prev.map((r) => (r.id === updatedReg.id ? updatedReg : r))
+          : [updatedReg, ...prev]
+      );
+
+      return { ok: true, registration: updatedReg, dispatchMessage };
+    },
+    [activeEvent, allRegistrations, dispatchQrPasses, events]
   );
 
   const importCsvRegistrations = useCallback(
@@ -1498,6 +1852,40 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const passEvent = events.find((e) => e.id === matchedReg!.eventId) || activeEvent;
       const targetEventId = matchedReg.eventId || activeEvent.id;
 
+      // Enforce event-specific authorization for Gate Control users (Control Admins can scan any event)
+      if (
+        session &&
+        session.role !== 'control' &&
+        !(session.allowedEventIds || []).includes(targetEventId)
+      ) {
+        const log: ScanLog = {
+          id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          eventId: activeEvent.id,
+          scannedAt: nowIso,
+          passCode: matchedPass.passCode,
+          registrationId: matchedReg.id,
+          parentNumber: matchedReg.parentNumber,
+          attendeeName: `${matchedPass.attendeeLabel} (Pass ${matchedPass.passIndex}/${matchedPass.totalPasses})`,
+          tier: matchedReg.category,
+          gate: activeGate,
+          status: 'INVALID',
+          message: `Unauthorized event — pass belongs to "${passEvent.name}"`,
+          scannedBy: scannerEmail,
+        };
+        playScannerTone('INVALID', audioMuted);
+        await recordScanLog(log);
+        return {
+          status: 'INVALID',
+          scannedAt: nowIso,
+          headline: 'INVALID — WRONG EVENT',
+          subtext: `This pass belongs to "${passEvent.name}", which is not assigned to your gate scanner account.`,
+          registration: matchedReg,
+          pass: matchedPass,
+          activeGate,
+          eventName: passEvent.name,
+        };
+      }
+
       if (passEvent.strictGateMode && matchedReg.assignedGate !== activeGate) {
         const log: ScanLog = {
           id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -1626,7 +2014,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         eventName: passEvent.name,
       };
     },
-    [activeEvent, allRegistrations, audioMuted, events, recordScanLog, registrations, session?.email]
+    [activeEvent, allRegistrations, audioMuted, events, recordScanLog, registrations, session]
   );
 
   const clearScanLogs = useCallback(async () => {
@@ -1652,7 +2040,9 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const value: EventContextValue = {
     loading,
     isLiveSupabase: isSupabaseConfigured,
-    events,
+    allEvents: events,
+    events: visibleEvents,
+    hasAssignedEvents,
     activeEventId: activeEvent.id,
     activeEvent,
     setActiveEventId,
@@ -1681,7 +2071,9 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     addAuthorizedUser,
     updateAuthorizedUser,
     removeAuthorizedUser,
+    findExistingRegistration,
     createRegistration,
+    updateExistingRegistration,
     importCsvRegistrations,
     deleteRegistration,
     resendQrPasses: dispatchQrPasses,

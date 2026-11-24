@@ -81,6 +81,8 @@ export const StaffDeskRegistration: React.FC<StaffDeskRegistrationProps> = ({ on
         fromInvitationPage: false,
       });
 
+      if (!registration) return;
+
       setSelectedRegId(registration.id);
       setActivePassIdx(0);
       setParentNumber('');

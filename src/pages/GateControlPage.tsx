@@ -73,7 +73,7 @@ async function decodeCanvasQr(
 }
 
 export const GateControlPage: React.FC = () => {
-  const { activeEvent, venues, registrations, scanLogs, scanQrCode, refreshData, showToast } = useEvent();
+  const { activeEvent, hasAssignedEvents, venues, registrations, scanLogs, scanQrCode, refreshData, showToast } = useEvent();
 
   const [mobileTab, setMobileTab] = useState<MobileTab>('scanner');
   const [inputMode, setInputMode] = useState<InputMode>('camera');
@@ -345,6 +345,22 @@ export const GateControlPage: React.FC = () => {
     setRefreshing(false);
     showToast('Synced latest registrations & passes', 'success');
   };
+
+  if (!hasAssignedEvents) {
+    return (
+      <div className="min-h-screen flex flex-col bg-[#F7F4F2]">
+        <TopBar />
+        <main className="max-w-lg mx-auto w-full px-4 py-16 flex-1 flex items-center justify-center">
+          <div className="glass-panel rounded-2xl p-7 border-t-4 border-t-[#8A6D3B] text-center space-y-2.5">
+            <h2 className="text-lg font-bold text-[#26211E]">No Events Assigned Yet</h2>
+            <p className="text-xs text-[#7B6E65] leading-relaxed">
+              Your Gate Control account is not currently assigned to any event. Please ask a Control Dashboard Administrator to authorize you for your event(s).
+            </p>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F4F2]">
