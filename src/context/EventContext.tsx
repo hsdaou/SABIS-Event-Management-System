@@ -1706,11 +1706,21 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         } catch {
           // treat as raw code
         }
+      } else {
+        // 3. Extract embedded pass code / registration ID if wrapped in text or URL
+        const passMatch = token.match(/EVT-[A-Z0-9]+-[A-Z0-9]+-\d+/i);
+        if (passMatch) {
+          parsedPassCode = passMatch[0].trim();
+        } else {
+          const regMatch = token.match(/EVT-[A-Z0-9]+-[A-Z0-9]+/i);
+          if (regMatch) parsedRegId = regMatch[0].trim();
+        }
       }
 
       const upperRaw = token.toUpperCase();
-      const upperPass = (parsedPassCode || upperRaw).toUpperCase();
-      const lookupKey = (parsedRegId || parsedParentNumber || upperPass).toUpperCase();
+      const upperPass = (parsedPassCode || upperRaw).toUpperCase().trim();
+      const lookupKey = (parsedRegId || parsedParentNumber || upperPass).toUpperCase().trim();
+      const safePostgrestKey = lookupKey.replace(/[^A-Z0-9_-]/g, '');
 
       let matchedReg: Registration | null = null;
       let matchedPass: AttendeePass | null = null;
@@ -1758,11 +1768,11 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               .eq('id', passRow.registration_id)
               .maybeSingle();
             regRow = rData;
-          } else {
+          } else if (safePostgrestKey) {
             const { data: rData } = await supabase
               .from('registrations')
               .select('*')
-              .or(`id.ilike.${lookupKey},parent_number.ilike.${lookupKey}`)
+              .or(`id.ilike.${safePostgrestKey},parent_number.ilike.${safePostgrestKey}`)
               .limit(1)
               .maybeSingle();
             regRow = rData;
@@ -1852,7 +1862,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           status: 'INVALID',
           scannedAt: nowIso,
           headline: 'INVALID QR — ACCESS DENIED',
-          subtext: `Code "${(parsedPassCode || token).slice(0, 32)}" was not found in the database.`,
+          subtext: `Code "${(parsedPassCode || token).slice(0, 32)}" was not found in your authorized event database. Tap "Sync Passes" or verify the user registered for this event.`,
           registration: null,
           pass: null,
           activeGate,

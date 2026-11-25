@@ -2,7 +2,7 @@ import QRCode from 'qrcode';
 import type { AttendeePass, Registration } from '../types';
 
 export const SABIS_GREEN = '#016836';
-export const SABIS_QR_DARK = '#014A26'; // High-contrast SABIS deep green for instant mobile camera decoding
+export const SABIS_QR_DARK = '#000000'; // Pure black ISO/IEC 18004 contrast for instant phone-to-phone scanning
 export const SABIS_GOLD = '#8A6D3B';
 export const SABIS_CREAM = '#F7F4F2';
 export const SABIS_STONE = '#E3DBD3';
@@ -65,67 +65,23 @@ function loadImageCached(src: string, cacheKey: 'crest' | 'wordmark'): Promise<H
 }
 
 /**
- * Generates an official SABIS®-branded QR code Data URL:
- * - High-contrast SABIS® Deep Green (#014A26) modules on crisp white
- * - Proper 4-module quiet zone (ISO/IEC 18004 standard) + error correction level 'H' (30% redundancy)
- * - Compact 17% official SABIS® crest medallion in center for instant mobile camera decoding
+ * Generates an ultra-reliable, ISO/IEC 18004 compliant QR code Data URL:
+ * - Pure black (#000000) modules on crisp white (#FFFFFF) for maximum phone-to-phone contrast
+ * - Proper 4-module quiet zone + error correction level 'Q' (25% pure unobstructed redundancy)
+ * - Compact Version 2 (25x25) large modules for SABIS:<passCode> with ZERO center obstruction
+ *   (SABIS® branding & logo are placed cleanly on the pass card frame around the QR code)
  */
-export async function generateQrDataUrl(payload: string, width = 360): Promise<string> {
-  const renderSize = Math.max(width, 360);
-  const baseQrUrl = await QRCode.toDataURL(payload, {
+export async function generateQrDataUrl(payload: string, width = 400): Promise<string> {
+  const renderSize = Math.max(width, 400);
+  return QRCode.toDataURL(payload, {
     width: renderSize,
     margin: 4,
-    errorCorrectionLevel: 'H',
+    errorCorrectionLevel: 'Q',
     color: {
       dark: SABIS_QR_DARK,
       light: '#FFFFFF',
     },
   });
-
-  if (typeof document === 'undefined') return baseQrUrl;
-
-  try {
-    const qrImg = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const i = new Image();
-      i.onload = () => resolve(i);
-      i.onerror = reject;
-      i.src = baseQrUrl;
-    });
-
-    const crest = await loadImageCached('/sabis-crest.png', 'crest');
-    const canvas = document.createElement('canvas');
-    canvas.width = renderSize;
-    canvas.height = renderSize;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return baseQrUrl;
-
-    ctx.drawImage(qrImg, 0, 0, renderSize, renderSize);
-
-    if (crest) {
-      // Keep total medallion box <= 18% of QR width so decoding is instantaneous on all phone cameras
-      const badgeSize = Math.round(renderSize * 0.145);
-      const pad = Math.max(4, Math.round(renderSize * 0.016));
-      const box = badgeSize + pad * 2;
-      const x = Math.round((renderSize - box) / 2);
-      const y = Math.round((renderSize - box) / 2);
-      const radius = Math.round(box * 0.2);
-
-      ctx.fillStyle = '#FFFFFF';
-      ctx.beginPath();
-      ctx.roundRect(x, y, box, box, radius);
-      ctx.fill();
-
-      ctx.strokeStyle = SABIS_GREEN;
-      ctx.lineWidth = Math.max(1.5, renderSize * 0.006);
-      ctx.stroke();
-
-      ctx.drawImage(crest, x + pad, y + pad, badgeSize, badgeSize);
-    }
-
-    return canvas.toDataURL('image/png');
-  } catch {
-    return baseQrUrl;
-  }
 }
 
 export async function downloadPassPng(
@@ -278,6 +234,20 @@ export async function downloadPassPng(
 }
 
 let sharedAudioCtx: AudioContext | null = null;
+
+export function unlockScannerAudio(): void {
+  try {
+    const AudioContextClass =
+      window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return;
+    if (!sharedAudioCtx) sharedAudioCtx = new AudioContextClass();
+    if (sharedAudioCtx.state === 'suspended') {
+      sharedAudioCtx.resume();
+    }
+  } catch {
+    // ignore
+  }
+}
 
 export function playScannerTone(type: 'VALID' | 'USED' | 'INVALID', muted: boolean): void {
   if (muted) return;
