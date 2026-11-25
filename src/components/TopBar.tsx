@@ -70,7 +70,7 @@ export const TopBar: React.FC = () => {
                   >
                     {events.map((ev) => (
                       <option key={ev.id} value={ev.id}>
-                        {ev.name}
+                        {ev.eventDate ? `${ev.name} (${ev.eventDate})` : ev.name}
                       </option>
                     ))}
                   </select>

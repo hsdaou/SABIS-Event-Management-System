@@ -23,7 +23,9 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import { ConfirmActionModal, type ConfirmActionConfig } from '../components/ConfirmActionModal';
 import { EventLogsPanel } from '../components/EventLogsPanel';
+import { EventMultiSelectDropdown } from '../components/EventMultiSelectDropdown';
 import { KpiStrip } from '../components/KpiStrip';
 import { LiveAttendanceView } from '../components/LiveAttendanceView';
 import { PassInspectorModal } from '../components/PassInspectorModal';
@@ -122,6 +124,7 @@ export const ControlDashboardPage: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<ControlTab>('form');
   const [inspectingReg, setInspectingReg] = useState<Registration | null>(null);
+  const [confirmAction, setConfirmAction] = useState<ConfirmActionConfig | null>(null);
 
   // Create New Event modal state
   const [showCreateEventModal, setShowCreateEventModal] = useState(false);
@@ -135,19 +138,20 @@ export const ControlDashboardPage: React.FC = () => {
   const [newVenueName, setNewVenueName] = useState('');
   const [newVenueCapacity, setNewVenueCapacity] = useState(120);
 
-  // User Access Form State
+  // User Access Form State — always defaults to the currently selected/created event
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserName, setNewUserName] = useState('');
   const [newUserRole, setNewUserRole] = useState<UserRole>('regular');
   const [newUserEventIds, setNewUserEventIds] = useState<string[]>([activeEvent.id]);
   const [userError, setUserError] = useState('');
+  const [showAllUsers, setShowAllUsers] = useState(false);
 
+  // Whenever the active event changes (including right after creating a new event),
+  // default the Add User dropdown to the current event and scope the directory to it.
   useEffect(() => {
-    setNewUserEventIds((prev) => {
-      const valid = prev.filter((id) => events.some((e) => e.id === id));
-      return valid.length > 0 ? valid : [activeEvent.id];
-    });
-  }, [activeEvent.id, events]);
+    setNewUserEventIds([activeEvent.id]);
+    setShowAllUsers(false);
+  }, [activeEvent.id]);
 
   // Email delivery health status
   const [emailStatus, setEmailStatus] = useState<{
@@ -331,29 +335,31 @@ export const ControlDashboardPage: React.FC = () => {
     showToast(`Added ${newUserEmail} as ${newUserRole.toUpperCase()} user`, 'success');
     setNewUserEmail('');
     setNewUserName('');
+    setNewUserEventIds([activeEvent.id]);
   };
 
-  const toggleNewUserEvent = (eventId: string) => {
-    setNewUserEventIds((prev) =>
-      prev.includes(eventId) ? prev.filter((id) => id !== eventId) : [...prev, eventId]
-    );
-  };
-
-  const toggleExistingUserEvent = async (userId: string, currentIds: string[], eventId: string) => {
-    const nextIds = currentIds.includes(eventId)
-      ? currentIds.filter((id) => id !== eventId)
-      : [...currentIds, eventId];
+  const updateExistingUserEvents = async (userId: string, nextIds: string[]) => {
     await updateAuthorizedUser(userId, { allowedEventIds: nextIds });
     showToast('Updated event access permissions', 'success');
   };
 
+  const eventAuthorizedUsers = useMemo(
+    () =>
+      authorizedUsers.filter(
+        (u) => u.role === 'control' || (u.allowedEventIds || []).includes(activeEvent.id)
+      ),
+    [activeEvent.id, authorizedUsers]
+  );
+
+  const displayedUsers = showAllUsers ? authorizedUsers : eventAuthorizedUsers;
+
   const tierCounts = useMemo(
     () => ({
-      regular: authorizedUsers.filter((u) => u.role === 'regular').length,
-      gate: authorizedUsers.filter((u) => u.role === 'gate').length,
-      control: authorizedUsers.filter((u) => u.role === 'control').length,
+      regular: displayedUsers.filter((u) => u.role === 'regular').length,
+      gate: displayedUsers.filter((u) => u.role === 'gate').length,
+      control: displayedUsers.filter((u) => u.role === 'control').length,
     }),
-    [authorizedUsers]
+    [displayedUsers]
   );
 
   const currentFields = ALL_FIELD_TOGGLES.filter((f) => f.group === 'current');
@@ -383,11 +389,11 @@ export const ControlDashboardPage: React.FC = () => {
               aria-label="Switch Managed Event"
               value={activeEvent.id}
               onChange={(e) => setActiveEventId(e.target.value)}
-              className="px-3 py-2 rounded-xl bg-[#F7F4F2] border border-[#E3DBD3] text-xs font-semibold text-[#26211E] focus:outline-none focus:border-[#016836]"
+              className="px-3 py-2 rounded-xl bg-[#F7F4F2] border border-[#E3DBD3] text-xs font-semibold text-[#26211E] focus:outline-none focus:border-[#016836] max-w-[260px] sm:max-w-[320px]"
             >
               {events.map((ev) => (
                 <option key={ev.id} value={ev.id}>
-                  {ev.name}
+                  {ev.eventDate ? `${ev.name} (${ev.eventDate})` : ev.name}
                 </option>
               ))}
             </select>
@@ -404,10 +410,20 @@ export const ControlDashboardPage: React.FC = () => {
             {events.length > 1 && (
               <button
                 type="button"
-                onClick={async () => {
-                  const name = activeEvent.name;
-                  await deleteEvent(activeEvent.id);
-                  showToast(`Deleted event "${name}"`, 'info');
+                onClick={() => {
+                  const eventIdToDelete = activeEvent.id;
+                  const eventNameToDelete = activeEvent.name;
+                  setConfirmAction({
+                    title: 'Delete Event Permanently?',
+                    description:
+                      'This will permanently delete this event along with all of its venues, registrations, QR passes, and scan logs. This action cannot be undone.',
+                    targetLabel: `${eventNameToDelete} (${registrations.length} registrations, ${scanLogs.length} scan logs)`,
+                    confirmLabel: 'Delete Event',
+                    onConfirm: async () => {
+                      await deleteEvent(eventIdToDelete);
+                      showToast(`Deleted event "${eventNameToDelete}"`, 'info');
+                    },
+                  });
                 }}
                 className="px-3 py-2 rounded-xl text-xs font-semibold bg-[#F2DEDE] hover:bg-[#E53C2E] hover:text-white text-[#E53C2E] border border-[#E53C2E]/30 flex items-center gap-1 transition"
                 title="Delete Active Event"
@@ -463,7 +479,7 @@ export const ControlDashboardPage: React.FC = () => {
               }`}
             >
               <Users className="w-3.5 h-3.5" />
-              <span>3. User Access ({authorizedUsers.length})</span>
+              <span>3. User Access ({eventAuthorizedUsers.length})</span>
             </button>
             <button
               type="button"
@@ -982,8 +998,21 @@ export const ControlDashboardPage: React.FC = () => {
                       <button
                         type="button"
                         disabled={venueDrafts.length <= 1}
-                        onClick={() => setVenueDrafts((prev) => prev.filter((_, i) => i !== idx))}
+                        onClick={() =>
+                          setConfirmAction({
+                            title: 'Remove Venue?',
+                            description:
+                              'Are you sure you want to remove this venue from the event? Click "Save Event & Venues" afterwards to persist your changes.',
+                            targetLabel: v.name || 'Unnamed Venue',
+                            confirmLabel: 'Remove Venue',
+                            onConfirm: () => {
+                              setVenueDrafts((prev) => prev.filter((_, i) => i !== idx));
+                              showToast(`Removed venue "${v.name}" from draft`, 'info');
+                            },
+                          })
+                        }
                         className="px-2.5 py-2 rounded-lg text-xs text-[#E53C2E] hover:bg-[#F2DEDE] disabled:opacity-30 transition"
+                        title="Remove Venue"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -1279,38 +1308,23 @@ export const ControlDashboardPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Event-Specific Authorization Picker (for School Dashboard & Gate Control) */}
+                {/* Event-Specific Authorization Dropdown (for School Dashboard & Gate Control) */}
                 {newUserRole !== 'control' ? (
                   <div className="p-3.5 rounded-xl bg-[#F7F4F2] border border-[#E3DBD3] space-y-2">
                     <label className="block text-xs font-bold text-[#26211E]">
                       Authorized Event(s) <span className="text-[#E53C2E]">*</span>
                     </label>
                     <p className="text-[11px] text-[#7B6E65]">
-                      Select which specific event(s) this user can access (unselected events remain hidden):
+                      Defaults to <strong>{activeEvent.name}</strong>. Use the dropdown below to select one or multiple events:
                     </p>
-                    <div className="space-y-1.5 max-h-40 overflow-y-auto pt-1">
-                      {events.map((ev) => {
-                        const checked = newUserEventIds.includes(ev.id);
-                        return (
-                          <label
-                            key={ev.id}
-                            className={`flex items-center gap-2.5 p-2 rounded-lg border cursor-pointer text-xs transition ${
-                              checked
-                                ? 'bg-white border-[#016836] text-[#26211E] font-semibold'
-                                : 'bg-white/60 border-[#E3DBD3] text-[#7B6E65]'
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => toggleNewUserEvent(ev.id)}
-                              className="rounded border-[#B6ADA4] text-[#016836] focus:ring-[#016836]"
-                            />
-                            <span className="truncate">{ev.name}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
+                    <EventMultiSelectDropdown
+                      events={events}
+                      selectedEventIds={newUserEventIds}
+                      activeEventId={activeEvent.id}
+                      onChange={setNewUserEventIds}
+                      placeholder="Select authorized event(s)..."
+                      ariaLabel="Select authorized events for new user"
+                    />
                   </div>
                 ) : (
                   <div className="p-3 rounded-xl bg-[#EDF6F1] border border-[#016836]/25 text-[11px] font-semibold text-[#016836]">
@@ -1330,146 +1344,186 @@ export const ControlDashboardPage: React.FC = () => {
             <div className="lg:col-span-7 glass-panel rounded-2xl p-5 sm:p-6 space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E3DBD3] pb-3.5">
                 <div>
-                  <h3 className="text-base font-bold text-[#26211E]">Authorized Email Directory</h3>
+                  <h3 className="text-base font-bold text-[#26211E]">
+                    {showAllUsers
+                      ? 'All Authorized Users (All Events)'
+                      : `Authorized Users — ${activeEvent.name}`}
+                  </h3>
                   <p className="text-xs text-[#7B6E65] mt-0.5">
                     {tierCounts.regular} School Dashboard • {tierCounts.gate} Gate Control •{' '}
                     {tierCounts.control} Control Admin
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => copyText(`${window.location.origin}/login`, 'Copied Staff Login URL')}
-                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#F7F4F2] hover:bg-[#E3DBD3]/60 text-[#016836] border border-[#E3DBD3] flex items-center gap-1.5 transition"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>Copy Login Link</span>
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="inline-flex items-center rounded-xl bg-[#F7F4F2] border border-[#E3DBD3] p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowAllUsers(false)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
+                        !showAllUsers
+                          ? 'bg-[#016836] text-white shadow-sm'
+                          : 'text-[#7B6E65] hover:text-[#26211E]'
+                      }`}
+                    >
+                      This Event ({eventAuthorizedUsers.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowAllUsers(true)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
+                        showAllUsers
+                          ? 'bg-[#016836] text-white shadow-sm'
+                          : 'text-[#7B6E65] hover:text-[#26211E]'
+                      }`}
+                    >
+                      All Users ({authorizedUsers.length})
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => copyText(`${window.location.origin}/login`, 'Copied Staff Login URL')}
+                    className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#F7F4F2] hover:bg-[#E3DBD3]/60 text-[#016836] border border-[#E3DBD3] flex items-center gap-1.5 transition"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copy Login Link</span>
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-2.5">
-                {authorizedUsers.map((u) => {
-                  const isSelf = session?.email.toLowerCase() === u.email.toLowerCase();
-                  return (
-                    <div
-                      key={u.id}
-                      className="p-3.5 rounded-xl bg-[#F7F4F2] border border-[#E3DBD3] space-y-2.5"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm font-bold text-[#26211E]">{u.fullName || u.email}</span>
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                                u.role === 'control'
-                                  ? 'bg-[#DFF0D8] text-[#016836] border-[#016836]/25'
+                {displayedUsers.length === 0 ? (
+                  <div className="p-6 rounded-xl bg-[#F7F4F2] border border-dashed border-[#B6ADA4] text-center space-y-1">
+                    <p className="text-xs font-bold text-[#26211E]">
+                      No authorized users assigned to {activeEvent.name} yet.
+                    </p>
+                    <p className="text-[11px] text-[#7B6E65]">
+                      Add a user on the left or switch to &quot;All Users&quot; to assign an existing staff member.
+                    </p>
+                  </div>
+                ) : (
+                  displayedUsers.map((u) => {
+                    const isSelf = session?.email.toLowerCase() === u.email.toLowerCase();
+                    return (
+                      <div
+                        key={u.id}
+                        className="p-3.5 rounded-xl bg-[#F7F4F2] border border-[#E3DBD3] space-y-2.5"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-bold text-[#26211E]">{u.fullName || u.email}</span>
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                  u.role === 'control'
+                                    ? 'bg-[#DFF0D8] text-[#016836] border-[#016836]/25'
+                                    : u.role === 'regular'
+                                    ? 'bg-[#E6F4FA] text-[#0080BB] border-[#0080BB]/25'
+                                    : 'bg-[#FCF8E3] text-[#8A6D3B] border-[#8A6D3B]/30'
+                                }`}
+                              >
+                                {u.role === 'control'
+                                  ? 'Control Admin'
                                   : u.role === 'regular'
-                                  ? 'bg-[#E6F4FA] text-[#0080BB] border-[#0080BB]/25'
-                                  : 'bg-[#FCF8E3] text-[#8A6D3B] border-[#8A6D3B]/30'
-                              }`}
-                            >
-                              {u.role === 'control'
-                                ? 'Control Admin'
-                                : u.role === 'regular'
-                                ? 'Tier 1: School Dashboard'
-                                : 'Tier 2: Gate Control'}
-                            </span>
-                            {!u.active && (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#F2DEDE] text-[#E53C2E]">
-                                Disabled
+                                  ? 'Tier 1: School Dashboard'
+                                  : 'Tier 2: Gate Control'}
                               </span>
+                              {!u.active && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#F2DEDE] text-[#E53C2E]">
+                                  Disabled
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs font-mono text-[#7B6E65] mt-0.5">{u.email}</p>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={u.role}
+                              disabled={isSelf}
+                              onChange={(e) => {
+                                const nextRole = e.target.value as UserRole;
+                                updateAuthorizedUser(u.id, {
+                                  role: nextRole,
+                                  allowedEventIds:
+                                    nextRole === 'control'
+                                      ? []
+                                      : u.allowedEventIds.length > 0
+                                      ? u.allowedEventIds
+                                      : [activeEvent.id],
+                                });
+                              }}
+                              className="px-2.5 py-1.5 rounded-lg bg-white border border-[#B6ADA4] text-xs text-[#26211E] disabled:opacity-50"
+                            >
+                              <option value="regular">Tier 1: School Dashboard</option>
+                              <option value="gate">Tier 2: Gate Control</option>
+                              <option value="control">Control Admin</option>
+                            </select>
+
+                            {!isSelf && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => updateAuthorizedUser(u.id, { active: !u.active })}
+                                  className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white hover:bg-[#E3DBD3]/60 text-[#26211E] border border-[#E3DBD3]"
+                                >
+                                  {u.active ? 'Disable' : 'Enable'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setConfirmAction({
+                                      title: 'Remove Authorized User?',
+                                      description:
+                                        'This user will immediately lose access to the SABIS® Event Management System across all assigned events.',
+                                      targetLabel: `${u.fullName || u.email} (${u.email}) — ${
+                                        u.role === 'control'
+                                          ? 'Control Admin'
+                                          : u.role === 'regular'
+                                          ? 'School Dashboard'
+                                          : 'Gate Control'
+                                      }`,
+                                      confirmLabel: 'Remove User',
+                                      onConfirm: async () => {
+                                        await removeAuthorizedUser(u.id);
+                                        showToast(`Removed ${u.email}`, 'info');
+                                      },
+                                    })
+                                  }
+                                  className="p-1.5 rounded-lg text-[#E53C2E] hover:bg-[#F2DEDE] transition"
+                                  title="Revoke User"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </>
                             )}
                           </div>
-                          <p className="text-xs font-mono text-[#7B6E65] mt-0.5">{u.email}</p>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                          <select
-                            value={u.role}
-                            disabled={isSelf}
-                            onChange={(e) => {
-                              const nextRole = e.target.value as UserRole;
-                              updateAuthorizedUser(u.id, {
-                                role: nextRole,
-                                allowedEventIds:
-                                  nextRole === 'control'
-                                    ? []
-                                    : u.allowedEventIds.length > 0
-                                    ? u.allowedEventIds
-                                    : [activeEvent.id],
-                              });
-                            }}
-                            className="px-2.5 py-1.5 rounded-lg bg-white border border-[#B6ADA4] text-xs text-[#26211E] disabled:opacity-50"
-                          >
-                            <option value="regular">Tier 1: School Dashboard</option>
-                            <option value="gate">Tier 2: Gate Control</option>
-                            <option value="control">Control Admin</option>
-                          </select>
-
-                          {!isSelf && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => updateAuthorizedUser(u.id, { active: !u.active })}
-                                className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white hover:bg-[#E3DBD3]/60 text-[#26211E] border border-[#E3DBD3]"
-                              >
-                                {u.active ? 'Disable' : 'Enable'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  removeAuthorizedUser(u.id);
-                                  showToast(`Removed ${u.email}`, 'info');
-                                }}
-                                className="p-1.5 rounded-lg text-[#E53C2E] hover:bg-[#F2DEDE] transition"
-                                title="Revoke User"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </>
+                        {/* Event Scope Dropdown Assignment for School Dashboard & Gate Control Users */}
+                        <div className="pt-2 border-t border-[#E3DBD3]/80 space-y-1.5">
+                          <span className="block text-[11px] font-bold text-[#7B6E65]">
+                            Authorized Events:
+                          </span>
+                          {u.role === 'control' ? (
+                            <span className="inline-block px-2 py-0.5 rounded-md text-[11px] font-semibold bg-[#DFF0D8] text-[#016836] border border-[#016836]/25">
+                              All Events (Control Admin)
+                            </span>
+                          ) : (
+                            <EventMultiSelectDropdown
+                              events={events}
+                              selectedEventIds={u.allowedEventIds || []}
+                              activeEventId={activeEvent.id}
+                              onChange={(nextIds) => updateExistingUserEvents(u.id, nextIds)}
+                              placeholder="No events assigned — select event(s)..."
+                              compact={true}
+                              ariaLabel={`Select authorized events for ${u.email}`}
+                            />
                           )}
                         </div>
                       </div>
-
-                      {/* Event Scope Assignment Bar for School Dashboard & Gate Control Users */}
-                      <div className="pt-2 border-t border-[#E3DBD3]/80 flex flex-wrap items-center gap-1.5">
-                        <span className="text-[11px] font-bold text-[#7B6E65] mr-1">
-                          Authorized Events:
-                        </span>
-                        {u.role === 'control' ? (
-                          <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-[#DFF0D8] text-[#016836] border border-[#016836]/25">
-                            All Events (Control Admin)
-                          </span>
-                        ) : (
-                          events.map((ev) => {
-                            const assigned = (u.allowedEventIds || []).includes(ev.id);
-                            return (
-                              <button
-                                key={ev.id}
-                                type="button"
-                                onClick={() =>
-                                  toggleExistingUserEvent(u.id, u.allowedEventIds || [], ev.id)
-                                }
-                                className={`px-2.5 py-0.5 rounded-md text-[11px] font-semibold border transition flex items-center gap-1 ${
-                                  assigned
-                                    ? 'bg-[#016836] text-white border-[#016836]'
-                                    : 'bg-white text-[#7B6E65] border-[#E3DBD3] hover:border-[#016836]'
-                                }`}
-                                title={
-                                  assigned
-                                    ? `Click to revoke access to ${ev.name}`
-                                    : `Click to grant access to ${ev.name}`
-                                }
-                              >
-                                {assigned && <Check className="w-3 h-3" />}
-                                <span>{ev.name}</span>
-                              </button>
-                            );
-                          })
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             </div>
           </div>
@@ -1489,13 +1543,34 @@ export const ControlDashboardPage: React.FC = () => {
               readOnly={false}
               onInspectPasses={setInspectingReg}
               onDeleteRegistration={(id) => {
-                deleteRegistration(id);
-                showToast(`Removed registration ${id}`, 'info');
+                const reg = registrations.find((r) => r.id === id);
+                setConfirmAction({
+                  title: 'Delete Registration?',
+                  description:
+                    'This will permanently delete this registration and invalidate all of its associated attendee QR passes.',
+                  targetLabel: reg
+                    ? `${reg.name} (${reg.id}) — ${reg.passes.length} QR pass(es)`
+                    : id,
+                  confirmLabel: 'Delete Registration',
+                  onConfirm: async () => {
+                    await deleteRegistration(id);
+                    showToast(`Removed registration ${id}`, 'info');
+                  },
+                });
               }}
-              onResetDemo={() => {
-                resetDemoData();
-                showToast('Restored default demo roster & settings', 'info');
-              }}
+              onResetDemo={() =>
+                setConfirmAction({
+                  title: 'Reset Demo Data?',
+                  description:
+                    'This will restore the default preview events, roster, and scan logs, replacing any unsaved local changes.',
+                  targetLabel: 'Local Preview Workspace',
+                  confirmLabel: 'Reset Data',
+                  onConfirm: async () => {
+                    await resetDemoData();
+                    showToast('Restored default demo roster & settings', 'info');
+                  },
+                })
+              }
             />
           </div>
         )}
@@ -1505,10 +1580,19 @@ export const ControlDashboardPage: React.FC = () => {
           <EventLogsPanel
             logs={scanLogs}
             canClear={true}
-            onClear={() => {
-              clearScanLogs();
-              showToast('Cleared event scan logs', 'info');
-            }}
+            onClear={() =>
+              setConfirmAction({
+                title: 'Clear Event Scan Logs?',
+                description:
+                  'This will permanently clear all gate scan audit logs for the currently selected event. This cannot be undone.',
+                targetLabel: `${activeEvent.name} (${scanLogs.length} scan log entries)`,
+                confirmLabel: 'Clear Logs',
+                onConfirm: async () => {
+                  await clearScanLogs();
+                  showToast('Cleared event scan logs', 'info');
+                },
+              })
+            }
           />
         )}
       </main>
@@ -1583,6 +1667,7 @@ export const ControlDashboardPage: React.FC = () => {
       )}
 
       <PassInspectorModal registration={inspectingReg} onClose={() => setInspectingReg(null)} />
+      <ConfirmActionModal config={confirmAction} onClose={() => setConfirmAction(null)} />
     </div>
   );
 };
